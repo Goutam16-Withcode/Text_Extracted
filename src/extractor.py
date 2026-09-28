@@ -42,15 +42,14 @@ PASSPORT_PATTERN = r"\b[A-Z][1-9][0-9]{7}\b"
 
 # Invoice / Receipt fields
 INVOICE_FIELDS = {
-    "invoice_number": r"(?i)(?:invoice|inv|bill|order)[\s#:\.]*([A-Z0-9\-/]+)",
-    "po_number": r"(?i)(?:p\.?o\.?|purchase order)[\s#:\.]*([A-Z0-9\-/]+)",
-    "gstin": r"(?i)(?:GSTIN|GST No\.?)[\s:\.]*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z])",
-    "due_date": r"(?i)(?:due|payment due|pay by)[\s:]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
-    "total": r"(?i)(?:total|grand total|amount due|net payable)[\s:₹$]*([0-9,]+(?:\.[0-9]{2})?)",
-    "subtotal": r"(?i)(?:subtotal|sub-total|taxable amount)[\s:₹$]*([0-9,]+(?:\.[0-9]{2})?)",
-    "tax": r"(?i)(?:tax|gst|vat|igst|cgst|sgst)[\s:₹$%]*([0-9,]+(?:\.[0-9]{2})?)",
-    "discount": r"(?i)(?:discount|offer)[\s:₹$%-]*([0-9,]+(?:\.[0-9]{2})?)",
-    "vendor": r"(?i)(?:from|vendor|billed by|company)[\s:]*([A-Za-z][A-Za-z\s&.,]{2,40})",
+    "invoice_number": r"(?i)\b(?:invoice|inv|bill|order)[\s#:\.-]*([A-Z0-9\-_/]{3,30})",
+    "po_number": r"(?i)\b(?:p\.?o\.?\s*(?:#|num(?:ber)?)?|purchase\s+order(?:\s*#)?)[\s#:\.-]*([A-Z0-9\-_/]{3,30})",
+    "gstin": r"(?i)\b(?:GSTIN|GST\s*No\.?)[\s:\.]*([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z])",
+    "due_date": r"(?i)\b(?:due\s+date|payment\s+due|pay\s+by)[\s:]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})",
+    "total": r"(?i)\b(?:grand\s+total|total\s+due|total\s+amount|amount\s+due|net\s+payable|total)[\s:₹$]*([0-9,]+(?:\.[0-9]{2})?)",
+    "subtotal": r"(?i)\b(?:subtotal|sub-total|taxable\s+amount)[\s:₹$]*([0-9,]+(?:\.[0-9]{2})?)",
+    "tax": r"(?i)\b(?:tax(?:\s*\(\d+%\))?|gst|vat|igst|cgst|sgst)[\s:₹$%]*([0-9,]+(?:\.[0-9]{2})?)",
+    "discount": r"(?i)\b(?:discount|special\s+offer)[\s:₹$%-]*([0-9,]+(?:\.[0-9]{2})?)",
 }
 
 DOCUMENT_TYPE_KEYWORDS = {
@@ -130,10 +129,15 @@ def redact_pii(text: str, redact_char: str = "█") -> tuple[str, int]:
 def extract_invoice_fields(text: str) -> Dict[str, str]:
     """Extract structured key-value invoice fields."""
     fields = {}
+    stopwords = {"se", "no", "is", "of", "to", "in", "on", "at", "by", "or", "and", "the", "for"}
     for field_name, pattern in INVOICE_FIELDS.items():
         match = re.search(pattern, text)
         if match:
-            fields[field_name] = match.group(1).strip() if match.lastindex else match.group(0).strip()
+            val = match.group(1).strip() if match.lastindex else match.group(0).strip()
+            # Eliminate trivial noise and punctuation-only values
+            clean_val = val.strip(" :#-.")
+            if len(clean_val) >= 2 and clean_val.lower() not in stopwords:
+                fields[field_name] = clean_val
     return fields
 
 

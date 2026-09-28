@@ -552,15 +552,44 @@ with tab_entities:
     with col_b:
         # Invoice fields
         inv = entities.get("invoice_fields", {})
+        FIELD_ICONS = {
+            "invoice_number": "🧾",
+            "po_number": "📋",
+            "total": "💰",
+            "subtotal": "💵",
+            "tax": "🏛️",
+            "discount": "🏷️",
+            "gstin": "🏢",
+            "due_date": "⏳",
+            "vendor": "🏬",
+        }
         if inv:
-            inv_html = "".join(f"""
-            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(99,102,241,0.1);">
-                <span style="color:#64748b;font-size:0.82rem;">{k.replace('_',' ').title()}</span>
-                <span style="color:#e2e8f0;font-size:0.82rem;font-weight:500;">{v}</span>
-            </div>""" for k, v in inv.items())
+            inv_rows = []
+            for k, v in inv.items():
+                icon = FIELD_ICONS.get(k, "📌")
+                title = k.replace('_', ' ').title()
+                inv_rows.append(f"""
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; margin-bottom:6px; background:rgba(15,23,42,0.6); border:1px solid rgba(99,102,241,0.18); border-radius:10px;">
+                    <span style="color:#94a3b8; font-size:0.84rem; display:flex; align-items:center; gap:6px;">
+                        <span>{icon}</span>
+                        <strong style="color:#cbd5e1; font-weight:500;">{title}</strong>
+                    </span>
+                    <span style="color:#38bdf8; font-size:0.86rem; font-weight:600; font-family:monospace; background:rgba(56,189,248,0.1); padding:2px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.25);">
+                        {v}
+                    </span>
+                </div>""")
+            inv_html = "".join(inv_rows)
             st.markdown(f"""<div class="doc-card">
-                <div style="font-weight:600;color:#e2e8f0;margin-bottom:8px;">🧾 Invoice / Receipt Fields</div>
+                <div style="font-weight:600; color:#e2e8f0; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
+                    <span>🧾 Key Document Fields</span>
+                    <span class="badge badge-cyan">{len(inv)} detected</span>
+                </div>
                 {inv_html}
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""<div class="doc-card">
+                <div style="font-weight:600; color:#e2e8f0; margin-bottom:6px;">🧾 Key Document Fields</div>
+                <div style="color:#64748b; font-size:0.82rem;">No structured invoice or PO fields detected in this document.</div>
             </div>""", unsafe_allow_html=True)
 
         # PII

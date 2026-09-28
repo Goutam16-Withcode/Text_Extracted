@@ -1,17 +1,28 @@
 """
-preprocessor.py — OpenCV Computer Vision preprocessing pipeline.
+preprocessor.py — Advanced Computer Vision preprocessing pipeline for documents and live camera photos.
 Features:
+  - EXIF rotation normalization (vital for mobile/camera photos)
   - Auto-deskew via Hough line transform
-  - CLAHE contrast enhancement
-  - Bilateral denoising
-  - Perspective warp (4-corner flattening)
-  - Adaptive binarization
+  - Background shadow & illumination normalization
+  - Unsharp masking for camera blur correction
+  - CLAHE adaptive contrast enhancement
+  - Bilateral edge-preserving denoising
+  - Adaptive Otsu binarization
+  - Perspective warp for angled captures
 """
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 import math
+
+
+def fix_exif_orientation(pil_img: Image.Image) -> Image.Image:
+    """Normalize image orientation using EXIF data (crucial for phone & webcam photos)."""
+    try:
+        return ImageOps.exif_transpose(pil_img)
+    except Exception:
+        return pil_img
 
 
 def pil_to_cv2(pil_img: Image.Image) -> np.ndarray:
@@ -24,6 +35,37 @@ def cv2_to_pil(cv2_img: np.ndarray) -> Image.Image:
     """Convert OpenCV BGR ndarray → PIL Image."""
     rgb = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
     return Image.fromarray(rgb)
+
+
+def remove_shadows_and_normalize(cv2_img: np.ndarray) -> np.ndarray:
+    """
+    Remove uneven background shadows and normalize illumination.
+    Particularly effective for phone photos with cast shadows or glare.
+    """
+    # Split into color planes
+    rgb_planes = cv2.split(cv2_img)
+    result_planes = []
+
+    for plane in rgb_planes:
+        # Dilate to approximate background
+        dilated_img = cv2.dilate(plane, np.ones((7, 7), np.uint8))
+        bg_img = cv2.medianBlur(dilated_img, 21)
+        # Difference between plane and estimated background
+        diff_img = 255 - cv2.absdiff(plane, bg_img)
+        # Normalize to full dynamic range
+        norm_img = cv2.normalize(
+            diff_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1
+        )
+        result_planes.append(norm_img)
+
+    return cv2.merge(result_planes)
+
+
+def sharpen_image(cv2_img: np.ndarray, strength: float = 1.3) -> np.ndarray:
+    """Apply unsharp mask filter to sharpen slightly blurry camera captures."""
+    gaussian = cv2.GaussianBlur(cv2_img, (0, 0), 2.0)
+    sharpened = cv2.addWeighted(cv2_img, 1.0 + strength, gaussian, -strength, 0)
+    return sharpened
 
 
 def auto_deskew(img: np.ndarray) -> np.ndarray:
@@ -44,8 +86,8 @@ def auto_deskew(img: np.ndarray) -> np.ndarray:
     else:
         angle = -angle
 
-    # Only correct if tilt is significant
-    if abs(angle) < 0.5 or abs(angle) > 45:
+    # Only correct if tilt is moderate and significant
+    if abs(angle) < 0.6 or abs(angle) > 40:
         return img
 
     h, w = img.shape[:2]
@@ -59,51 +101,54 @@ def auto_deskew(img: np.ndarray) -> np.ndarray:
     return rotated
 
 
-def enhance_contrast(img: np.ndarray) -> np.ndarray:
-    """Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) per channel."""
+def enhance_contrast(img: np.ndarray, clip_limit: float = 2.5) -> np.ndarray:
+    """Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)."""
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=(8, 8))
     l_enhanced = clahe.apply(l)
     merged = cv2.merge([l_enhanced, a, b])
     return cv2.cvtColor(merged, cv2.COLOR_LAB2BGR)
 
 
 def denoise(img: np.ndarray) -> np.ndarray:
-    """Bilateral filter to remove noise while preserving text edges."""
-    return cv2.bilateralFilter(img, d=9, sigmaColor=75, sigmaSpace=75)
+    """Bilateral filter to remove camera noise while preserving text edges."""
+    return cv2.bilateralFilter(img, d=7, sigmaColor=50, sigmaSpace=50)
 
 
 def binarize(img: np.ndarray) -> np.ndarray:
-    """Adaptive Otsu binarization for high-contrast black/white output."""
+    """Adaptive Gaussian thresholding for crisp black/white document text."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    # Background shadow removal prior to binarization
+    dilated = cv2.dilate(gray, np.ones((7, 7), np.uint8))
+    bg = cv2.medianBlur(dilated, 21)
+    diff = 255 - cv2.absdiff(gray, bg)
+    norm = cv2.normalize(diff, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+    
+    binary = cv2.adaptiveThreshold(
+        norm, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 10
+    )
     return cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
 
 
 def detect_document_corners(img: np.ndarray):
-    """
-    Detect the 4 corners of a document for perspective warp.
-    Returns corners array or None if not detected.
-    """
+    """Detect the 4 corners of a document for perspective warp."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edged = cv2.Canny(blurred, 75, 200)
+    edged = cv2.Canny(blurred, 50, 150)
 
     contours, _ = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
 
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
-    screen_cnt = None
     for c in contours:
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-        if len(approx) == 4:
-            screen_cnt = approx
-            break
+        if len(approx) == 4 and cv2.contourArea(c) > (img.shape[0] * img.shape[1] * 0.15):
+            return approx
 
-    return screen_cnt
+    return None
 
 
 def order_points(pts):
@@ -132,6 +177,9 @@ def perspective_warp(img: np.ndarray, corners) -> np.ndarray:
     height_b = np.linalg.norm(tl - bl)
     max_height = max(int(height_a), int(height_b))
 
+    if max_width < 100 or max_height < 100:
+        return img
+
     dst = np.array([
         [0, 0],
         [max_width - 1, 0],
@@ -146,39 +194,65 @@ def perspective_warp(img: np.ndarray, corners) -> np.ndarray:
 
 def full_preprocess(pil_img: Image.Image, mode: str = "auto") -> tuple[Image.Image, dict]:
     """
-    Full preprocessing pipeline.
-    mode: 'raw' | 'auto' | 'binarize' | 'warp'
-    Returns (processed_pil_image, metadata_dict)
+    Comprehensive document preprocessing pipeline.
+    Modes:
+      - 'auto': EXIF fix + deskew + shadow removal + CLAHE + sharpening + gentle denoise
+      - 'camera_enhance': Specialized for live camera / phone photos (shadows, glare, blur compensation)
+      - 'binarize': High contrast B&W text thresholding
+      - 'warp': 4-corner perspective flattening
+      - 'raw': Passthrough with EXIF rotation fixed
     """
-    cv2_img = pil_to_cv2(pil_img)
-    steps_applied = []
+    # Always normalize EXIF orientation first
+    fixed_pil = fix_exif_orientation(pil_img)
+    steps_applied = ["exif_orientation_fixed"]
 
     if mode == "raw":
-        return pil_img, {"steps": ["raw"]}
+        return fixed_pil, {"steps": ["raw_passthrough"]}
 
-    # Step 1: Auto deskew
-    deskewed = auto_deskew(cv2_img)
-    if not np.array_equal(deskewed, cv2_img):
-        steps_applied.append("deskew")
-    cv2_img = deskewed
+    cv2_img = pil_to_cv2(fixed_pil)
 
-    # Step 2: Contrast enhancement
-    cv2_img = enhance_contrast(cv2_img)
-    steps_applied.append("CLAHE contrast")
+    # Resolution scaling check: if too small (e.g. low-res webcam), upscale with bicubic
+    h, w = cv2_img.shape[:2]
+    if min(h, w) < 700:
+        scale = 800.0 / min(h, w)
+        cv2_img = cv2.resize(cv2_img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+        steps_applied.append("rescale_upscale")
 
-    # Step 3: Denoise
-    cv2_img = denoise(cv2_img)
-    steps_applied.append("bilateral denoise")
-
-    if mode == "binarize":
-        cv2_img = binarize(cv2_img)
-        steps_applied.append("Otsu binarize")
-    elif mode == "warp":
+    # Step 1: Perspective Warp if explicitly selected
+    if mode == "warp":
         corners = detect_document_corners(cv2_img)
         if corners is not None:
             cv2_img = perspective_warp(cv2_img, corners)
-            steps_applied.append("perspective warp")
+            steps_applied.append("perspective_warp")
         else:
-            steps_applied.append("warp not detected")
+            steps_applied.append("warp_not_detected")
+
+    # Step 2: Auto Deskew
+    deskewed = auto_deskew(cv2_img)
+    if not np.array_equal(deskewed, cv2_img):
+        steps_applied.append("auto_deskew")
+    cv2_img = deskewed
+
+    # Step 3: Camera photo shadow removal & illumination flattening
+    if mode in ("camera_enhance", "auto"):
+        cv2_img = remove_shadows_and_normalize(cv2_img)
+        steps_applied.append("shadow_illumination_norm")
+
+    # Step 4: CLAHE Contrast Enhancement
+    cv2_img = enhance_contrast(cv2_img, clip_limit=3.0 if mode == "camera_enhance" else 2.2)
+    steps_applied.append("clahe_contrast")
+
+    # Step 5: Unsharp masking to sharpen characters
+    cv2_img = sharpen_image(cv2_img, strength=1.2 if mode == "camera_enhance" else 0.8)
+    steps_applied.append("unsharp_mask_sharpen")
+
+    # Step 6: Denoise
+    cv2_img = denoise(cv2_img)
+    steps_applied.append("bilateral_denoise")
+
+    # Step 7: Binarization if requested
+    if mode == "binarize":
+        cv2_img = binarize(cv2_img)
+        steps_applied.append("adaptive_binarize")
 
     return cv2_to_pil(cv2_img), {"steps": steps_applied}
