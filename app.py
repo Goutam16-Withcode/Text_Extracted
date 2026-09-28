@@ -362,18 +362,18 @@ with st.sidebar:
     preprocess_mode = st.selectbox(
         "Processing Mode",
         [
+            "raw",
             "camera_enhance",
             "auto",
             "binarize",
             "warp",
-            "raw"
         ],
         format_func=lambda x: {
+            "raw": "🖼️ Original (No Preprocessing)",
             "camera_enhance": "📸 Camera & Mobile Capture (Shadows & Blur Fix)",
             "auto": "⚡ Auto Enhancement (Deskew + CLAHE)",
             "binarize": "⚪ High Contrast Black & White",
             "warp": "📐 Perspective Flatten (4-Corner)",
-            "raw": "Original Unmodified Image",
         }.get(x, x),
         index=0,
         help="Use 'Camera & Mobile Capture' for live camera photos with shadows or tilt."
@@ -510,7 +510,8 @@ if pil_img is None:
 # ──────────────────────────────────────────────
 with st.spinner("🎨 Applying image enhancement pipeline..."):
     # If camera capture, default to camera_enhance mode for optimal results
-    effective_mode = "camera_enhance" if is_camera_input and preprocess_mode == "auto" else preprocess_mode
+    # Use user-selected mode; camera_enhance only activates if user explicitly picks it
+    effective_mode = preprocess_mode
     processed_img, preprocess_meta = full_preprocess(pil_img, mode=effective_mode)
 
 
@@ -656,17 +657,18 @@ with tab_vis:
 
     with c1:
         if view_mode == "Bounding Boxes":
+            # Always draw overlays on the original image to preserve true colors
             annotated = draw_bounding_boxes(
-                processed_img, ocr_results,
+                pil_img, ocr_results,
                 show_labels=show_labels,
                 show_confidence=show_conf,
             )
             st.image(annotated, use_container_width=True, caption="Bounding Boxes with Confidence Color Coding")
         elif view_mode == "Confidence Heatmap":
-            heatmap_img = create_confidence_heatmap(processed_img, ocr_results)
+            heatmap_img = create_confidence_heatmap(pil_img, ocr_results)
             st.image(heatmap_img, use_container_width=True, caption="Confidence Heatmap (Blue=High Certainty, Red=Low Certainty)")
         elif view_mode == "Reading Order Flow":
-            order_img = draw_reading_order(processed_img, ocr_results)
+            order_img = draw_reading_order(pil_img, ocr_results)
             st.image(order_img, use_container_width=True, caption="Reconstructed Reading Order with Directional Arrows")
         else:
             col_o, col_p = st.columns(2)
@@ -699,8 +701,9 @@ with tab_search:
         )
 
     if keyword:
+        # Use original image for search highlights to preserve true colors
         highlighted_img, matched_idx, matched_texts = search_and_highlight(
-            processed_img, ocr_results, keyword, case_sensitive=case_sensitive
+            pil_img, ocr_results, keyword, case_sensitive=case_sensitive
         )
 
         if matched_texts:
