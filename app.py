@@ -1,16 +1,7 @@
 """
-app.py — Advanced Intelligent Document Processing (IDP) Platform
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Features:
-  1. OpenCV auto-deskew / contrast / denoising preprocessing
-  2. GPU-accelerated EasyOCR with bounding box visualization
-  3. Confidence heatmap & reading-order visualization
-  4. Interactive keyword search with spatial highlighting
-  5. PII detection & one-click redaction
-  6. Structured entity extraction (dates, amounts, invoice fields)
-  7. Embedding vector space visualization (PCA / t-SNE)
-  8. Semantic similarity heatmap
-  9. Multi-format export: Searchable PDF, Annotated PDF, JSON, CSV, TXT
+app.py — DocIQ: Advanced Intelligent Document Processing (IDP) Platform
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Light Theme Edition with Live Camera Optimization & Comprehensive OCR Accuracy Metrics
 """
 
 import streamlit as st
@@ -26,8 +17,25 @@ import sys
 # Make src importable
 sys.path.insert(0, os.path.dirname(__file__))
 
+import importlib
+
+# Ensure fresh imports across Streamlit hot reloads
+for mod in ["src.preprocessor", "src.ocr_engine", "src.visualizer", "src.extractor", "src.embedder", "src.exporter", "src.sample_docs"]:
+    if mod in sys.modules:
+        try:
+            importlib.reload(sys.modules[mod])
+        except Exception:
+            pass
+
 from src.preprocessor import full_preprocess
-from src.ocr_engine import run_ocr, get_full_text, get_statistics
+
+try:
+    from src.ocr_engine import run_ocr, get_full_text, compute_accuracy_metrics
+except ImportError:
+    if "src.ocr_engine" in sys.modules:
+        del sys.modules["src.ocr_engine"]
+    import src.ocr_engine
+    from src.ocr_engine import run_ocr, get_full_text, compute_accuracy_metrics
 from src.visualizer import draw_bounding_boxes, search_and_highlight, create_confidence_heatmap, draw_reading_order
 from src.extractor import extract_all, redact_pii
 from src.embedder import build_embedding_data
@@ -46,225 +54,287 @@ from src.sample_docs import SAMPLE_DOCUMENTS
 # Page Config
 # ──────────────────────────────────────────────
 st.set_page_config(
-    page_title="DocIQ — Advanced Intelligent Document Processing",
+    page_title="DocIQ — Intelligent Document Processing",
     page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ──────────────────────────────────────────────
-# Custom CSS: Dark Premium Theme
+# Custom CSS: Modern Clean Light Theme
 # ──────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
-*, *::before, *::after { font-family: 'Inter', sans-serif !important; box-sizing: border-box; }
+*, *::before, *::after {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    box-sizing: border-box;
+}
 
-/* Dark Background */
-.stApp { background: linear-gradient(135deg, #0a0e1a 0%, #0f172a 50%, #0d1117 100%) !important; }
+/* Light Background */
+.stApp {
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+    color: #0f172a !important;
+}
 .stApp > header { background: transparent !important; }
 
-/* Sidebar */
+/* Sidebar Light Styling */
 section[data-testid="stSidebar"] {
-    background: rgba(15,23,42,0.95) !important;
-    border-right: 1px solid rgba(99,102,241,0.25) !important;
+    background: #ffffff !important;
+    border-right: 1px solid #e2e8f0 !important;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.02) !important;
+}
+section[data-testid="stSidebar"] * {
+    color: #334155 !important;
 }
 
-/* Cards */
+/* Light Cards */
 .doc-card {
-    background: linear-gradient(145deg, rgba(30,41,59,0.95), rgba(15,23,42,0.98));
-    border: 1px solid rgba(99,102,241,0.3);
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px;
-    padding: 1.4rem 1.6rem;
+    padding: 1.3rem 1.5rem;
     margin-bottom: 1rem;
-    backdrop-filter: blur(20px);
-    transition: border-color 0.3s ease, transform 0.2s ease;
+    box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.05), 0 2px 6px -1px rgba(15, 23, 42, 0.02);
+    transition: all 0.25s ease;
 }
 .doc-card:hover {
-    border-color: rgba(99,102,241,0.6);
-    transform: translateY(-2px);
+    border-color: #cbd5e1;
+    box-shadow: 0 8px 20px -4px rgba(15, 23, 42, 0.08);
 }
 
-/* Hero header */
+/* Hero Header */
 .hero-header {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 40%, #06b6d4 100%);
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    font-size: 2.8rem;
+    font-size: 2.6rem;
     font-weight: 800;
-    letter-spacing: -1px;
-    line-height: 1.1;
+    letter-spacing: -0.8px;
+    line-height: 1.15;
 }
 
 .hero-sub {
-    color: #94a3b8;
+    color: #64748b;
     font-size: 1.05rem;
     font-weight: 400;
-    margin-top: 0.4rem;
-    margin-bottom: 2rem;
+    margin-top: 0.3rem;
+    margin-bottom: 1.5rem;
 }
 
-/* Badge */
+/* Badges */
 .badge {
     display: inline-block;
-    padding: 0.25rem 0.75rem;
+    padding: 0.3rem 0.75rem;
     border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
 }
-.badge-green { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
-.badge-yellow { background: rgba(234,179,8,0.15); color: #eab308; border: 1px solid rgba(234,179,8,0.3); }
-.badge-red { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-.badge-indigo { background: rgba(99,102,241,0.15); color: #818cf8; border: 1px solid rgba(99,102,241,0.3); }
-.badge-cyan { background: rgba(6,182,212,0.15); color: #22d3ee; border: 1px solid rgba(6,182,212,0.3); }
+.badge-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.badge-yellow { background: #fef9c3; color: #a16207; border: 1px solid #fef08a; }
+.badge-red { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.badge-indigo { background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe; }
+.badge-cyan { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
 
-/* Metric cards */
+/* Metric Cards */
 .metric-card {
-    background: rgba(30,41,59,0.7);
-    border: 1px solid rgba(99,102,241,0.2);
-    border-radius: 12px;
-    padding: 1.2rem;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 1.1rem 1rem;
     text-align: center;
-    transition: all 0.25s ease;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    transition: all 0.2s ease;
 }
-.metric-card:hover { border-color: rgba(99,102,241,0.5); background: rgba(30,41,59,0.95); }
-.metric-value { font-size: 2rem; font-weight: 700; color: #818cf8; line-height: 1; }
-.metric-label { font-size: 0.78rem; color: #64748b; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.05em; }
-
-/* Entity chip */
-.entity-chip {
-    display: inline-block;
-    margin: 2px 3px;
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-size: 0.82rem;
-    font-weight: 500;
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+    border-color: #cbd5e1;
 }
+.metric-value { font-size: 1.85rem; font-weight: 800; color: #4338ca; line-height: 1.1; }
+.metric-label { font-size: 0.75rem; color: #64748b; margin-top: 0.3rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; }
 
-/* Text areas */
-textarea { background: rgba(15,23,42,0.9) !important; color: #e2e8f0 !important; border: 1px solid rgba(99,102,241,0.3) !important; border-radius: 10px !important; }
+/* Accuracy Meter Box */
+.accuracy-banner {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #cbd5e1;
+    border-radius: 16px;
+    padding: 1.3rem 1.6rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+}
 
 /* Tabs */
-.stTabs [role="tablist"] { gap: 4px; background: rgba(15,23,42,0.8); border-radius: 12px; padding: 4px; border: 1px solid rgba(99,102,241,0.2); }
-.stTabs [role="tab"] { border-radius: 8px !important; color: #94a3b8 !important; font-weight: 500 !important; padding: 6px 16px !important; }
-.stTabs [aria-selected="true"] { background: linear-gradient(135deg, #6366f1, #8b5cf6) !important; color: white !important; }
+.stTabs [role="tablist"] {
+    gap: 6px;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 5px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+.stTabs [role="tab"] {
+    border-radius: 8px !important;
+    color: #64748b !important;
+    font-weight: 600 !important;
+    padding: 8px 18px !important;
+    border: none !important;
+}
+.stTabs [aria-selected="true"] {
+    background: #4f46e5 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3) !important;
+}
 
-/* Buttons */
+/* Primary Buttons */
 .stButton > button {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+    background: linear-gradient(135deg, #4f46e5, #6366f1) !important;
     border: none !important;
     color: white !important;
     font-weight: 600 !important;
     border-radius: 10px !important;
-    padding: 0.5rem 1.5rem !important;
+    padding: 0.55rem 1.4rem !important;
     transition: all 0.2s ease !important;
-    box-shadow: 0 4px 15px rgba(99,102,241,0.3) !important;
+    box-shadow: 0 3px 10px rgba(79, 70, 229, 0.25) !important;
 }
-.stButton > button:hover { transform: translateY(-2px) !important; box-shadow: 0 6px 20px rgba(99,102,241,0.5) !important; }
+.stButton > button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 6px 18px rgba(79, 70, 229, 0.35) !important;
+}
 
-/* File uploader */
+/* Text Areas & Inputs */
+textarea, input[type="text"] {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+}
+textarea:focus, input[type="text"]:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* File Uploader Light */
 [data-testid="stFileUploader"] {
-    background: rgba(15,23,42,0.8) !important;
-    border: 2px dashed rgba(99,102,241,0.4) !important;
+    background: #ffffff !important;
+    border: 2px dashed #cbd5e1 !important;
     border-radius: 16px !important;
+    padding: 1rem !important;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 3px; }
-
-/* Divider */
-hr { border-color: rgba(99,102,241,0.2) !important; }
-
-/* selectbox / slider labels */
-label { color: #94a3b8 !important; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ──────────────────────────────────────────────
-# Sidebar
+# Sidebar Controls
 # ──────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="text-align:center; padding: 1rem 0 0.5rem;">
-        <div style="font-size:2.5rem;">🧠</div>
-        <div style="font-size:1.2rem; font-weight:700; background:linear-gradient(135deg,#6366f1,#06b6d4);
-             -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">DocIQ</div>
-        <div style="font-size:0.7rem; color:#475569; margin-top:2px;">Intelligent Document Processing</div>
+    <div style="text-align:center; padding: 0.8rem 0 0.4rem;">
+        <div style="font-size:2.4rem;">🧠</div>
+        <div style="font-size:1.3rem; font-weight:800; color:#1e1b4b; letter-spacing:-0.5px;">DocIQ</div>
+        <div style="font-size:0.75rem; color:#64748b; font-weight:500;">Intelligent Document Processing</div>
     </div>
-    <hr style="margin: 0.8rem 0;">
+    <hr style="margin: 0.8rem 0; border-color:#e2e8f0;">
     """, unsafe_allow_html=True)
 
-    st.markdown("### ⚙️ OCR Settings")
+    st.markdown("#### ⚙️ OCR Settings")
     languages = st.multiselect(
         "Languages",
         ["en", "hi", "fr", "de", "es", "zh_sim", "ar"],
         default=["en", "hi"],
-        help="Select languages present in your document"
+        help="Select languages present in your document (en=English, hi=Hindi)"
     )
 
     confidence_threshold = st.slider(
-        "Confidence Threshold",
-        min_value=0.1, max_value=0.99, value=0.3, step=0.05,
-        help="Discard text detected below this confidence"
+        "Confidence Filter",
+        min_value=0.10, max_value=0.95, value=0.25, step=0.05,
+        help="Discard text detected below this confidence score"
     )
 
-    st.markdown("### 🖼️ Preprocessing")
+    st.markdown("#### 🖼️ Image Preprocessing")
     preprocess_mode = st.selectbox(
-        "Mode",
-        ["auto", "raw", "binarize", "warp"],
+        "Processing Mode",
+        [
+            "camera_enhance",
+            "auto",
+            "binarize",
+            "warp",
+            "raw"
+        ],
+        format_func=lambda x: {
+            "camera_enhance": "📸 Camera & Mobile Capture (Shadows & Blur Fix)",
+            "auto": "⚡ Auto Enhancement (Deskew + CLAHE)",
+            "binarize": "⚪ High Contrast Black & White",
+            "warp": "📐 Perspective Flatten (4-Corner)",
+            "raw": "Original Unmodified Image",
+        }.get(x, x),
         index=0,
-        help="auto=deskew+CLAHE+denoise | binarize=B&W | warp=perspective flatten"
+        help="Use 'Camera & Mobile Capture' for live camera photos with shadows or tilt."
     )
 
-    st.markdown("### 🔢 Embedding Settings")
+    camera_opt = st.checkbox(
+        "📸 Two-Pass Live Photo Optimization",
+        value=True,
+        help="Runs multi-pass recognition with high sensitivity for difficult lighting, uneven angles, or camera glare."
+    )
+
+    st.markdown("#### 🛡️ Privacy & Compliance")
+    auto_redact = st.toggle("Auto-Redact PII (Aadhaar, PAN, Cards)", value=False)
+
+    st.markdown("#### 🔢 Semantic Settings")
     embed_unit = st.selectbox("Text Unit", ["word", "sentence", "line"], index=0)
-    embed_reduction = st.selectbox("Reduction Method", ["PCA", "t-SNE", "UMAP"], index=0)
-    embed_clusters = st.slider("K-Means Clusters", 2, 10, 5)
+    embed_reduction = st.selectbox("Reduction Method", ["PCA", "t-SNE"], index=0)
+    embed_clusters = st.slider("K-Means Clusters", 2, 8, 4)
 
-    st.markdown("### 🛡️ Privacy")
-    auto_redact = st.toggle("Auto-detect & Redact PII", value=False)
-
-    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin:1rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
     st.markdown("""
-    <div style="font-size:0.7rem; color:#334155; text-align:center;">
-        GPU Accelerated · EasyOCR 1.7.2<br>
-        sentence-transformers · PyMuPDF
+    <div style="font-size:0.75rem; color:#64748b; text-align:center; line-height:1.5;">
+        <strong>GPU Accelerated</strong> · EasyOCR Engine<br>
+        OpenCV Preprocessing · Sentence-Transformers
     </div>
     """, unsafe_allow_html=True)
 
 
 # ──────────────────────────────────────────────
-# Main Content
+# Main Header
 # ──────────────────────────────────────────────
 st.markdown("""
 <div class="hero-header">DocIQ — Intelligent Document Processing</div>
 <div class="hero-sub">
-    Upload any document image → Auto-enhance → OCR → Visualize Embeddings → Extract Entities → Export
+    Capture or upload any document → Auto-enhance lighting & blur → Extract text & entities → Measure accuracy → Export
 </div>
 """, unsafe_allow_html=True)
 
-# Input Mode Tabs
+
+# ──────────────────────────────────────────────
+# Multi-Input Modes: Upload | Preset Sample | Camera Scanner
+# ──────────────────────────────────────────────
 input_tab1, input_tab2, input_tab3 = st.tabs([
-    "📁 Upload File",
+    "📁 Upload Image",
     "✨ Preset Sample Documents",
-    "📸 Camera Scanner",
+    "📸 Live Camera Scanner",
 ])
 
 pil_img = None
 doc_name = "document.png"
+is_camera_input = False
 
 with input_tab1:
     uploaded_file = st.file_uploader(
-        "Drop your document image here (JPG, PNG, WEBP)",
+        "Drop a document image here (JPG, PNG, WEBP)",
         type=["jpg", "jpeg", "png", "webp"],
-        help="Supports scanned documents, invoices, receipts, ID cards, forms, and business records.",
+        help="Upload scanned receipts, invoices, IDs, medical notes, or book pages.",
         key="file_uploader_input"
     )
     if uploaded_file is not None:
@@ -273,19 +343,19 @@ with input_tab1:
 
 with input_tab2:
     st.markdown("""
-    <div style="color:#94a3b8; font-size:0.88rem; margin-bottom: 0.8rem;">
-        No file handy? Pick a pre-configured synthetic sample to test the entire OCR, entity extraction, and embedding pipeline immediately:
+    <div style="color:#64748b; font-size:0.88rem; margin-bottom: 0.8rem;">
+        No document image on hand? Click a pre-configured sample to test the complete OCR, accuracy metrics, and export pipeline:
     </div>
     """, unsafe_allow_html=True)
 
-    sc1, sc2 = st.columns([1, 1])
+    sc1, sc2 = st.columns(2)
     for idx, (s_name, s_fn) in enumerate(SAMPLE_DOCUMENTS.items()):
         target_col = sc1 if idx % 2 == 0 else sc2
         with target_col:
             st.markdown(f"""
-            <div class="doc-card" style="padding:1rem;">
-                <div style="font-weight:700; color:#818cf8; font-size:1rem; margin-bottom:4px;">📄 {s_name}</div>
-                <div style="color:#64748b; font-size:0.78rem; margin-bottom:10px;">Includes tabular line items, totals, dates, and contact info.</div>
+            <div class="doc-card" style="padding:1.1rem;">
+                <div style="font-weight:700; color:#1e1b4b; font-size:1.05rem; margin-bottom:4px;">📄 {s_name}</div>
+                <div style="color:#64748b; font-size:0.8rem; margin-bottom:12px;">Includes line items, monetary values, dates, and contact data.</div>
             </div>
             """, unsafe_allow_html=True)
             if st.button(f"⚡ Load {s_name}", key=f"btn_sample_{idx}", use_container_width=True):
@@ -295,97 +365,172 @@ with input_tab2:
     if active_s and active_s in SAMPLE_DOCUMENTS and pil_img is None:
         pil_img = SAMPLE_DOCUMENTS[active_s]()
         doc_name = f"{active_s.lower().replace(' ', '_')}.png"
-        st.success(f"✓ Loaded sample: **{active_s}**")
+        st.success(f"✓ Loaded sample document: **{active_s}**")
 
 with input_tab3:
-    cam_file = st.camera_input("Take a photo of a document", key="camera_scanner_input")
-    if cam_file is not None and pil_img is None:
+    st.markdown("""
+    <div style="color:#64748b; font-size:0.88rem; margin-bottom: 0.5rem;">
+        Take a live photo of a document using your webcam or mobile camera. 
+        DocIQ automatically normalizes EXIF orientation, compensates for shadows, and sharpens text.
+    </div>
+    """, unsafe_allow_html=True)
+    cam_file = st.camera_input("Capture document with camera", key="camera_scanner_input")
+    if cam_file is not None:
         pil_img = Image.open(cam_file).convert("RGB")
         doc_name = "camera_capture.png"
+        is_camera_input = True
 
+
+# ──────────────────────────────────────────────
+# Empty State: Landing Feature Grid
+# ──────────────────────────────────────────────
 if pil_img is None:
-    # Landing feature grid
     st.markdown("<br>", unsafe_allow_html=True)
     cols = st.columns(4)
     features = [
-        ("🔍", "Visual OCR", "Bounding boxes with confidence heatmap & reading-order"),
-        ("🧬", "Embedding Space", "See your words as vector clusters in 2D space"),
-        ("🛡️", "PII Redaction", "Auto-detect Aadhaar, PAN, credit cards & redact"),
-        ("📊", "Entity Extraction", "Dates, amounts, invoice fields, emails auto-parsed"),
-        ("📄", "Searchable PDF", "Export with invisible text layer for native search"),
-        ("🔎", "Visual Search", "Search a keyword and light up its bounding box"),
-        ("🌡️", "Confidence Map", "Heatmap overlay showing OCR certainty spatially"),
-        ("⚡", "GPU Accelerated", "Torch CUDA 12.8 inference, model cached per session"),
+        ("🎯", "OCR Accuracy Gauge", "Precise character & word reliability scores with quality grade"),
+        ("📸", "Live Photo Ready", "Shadow removal, blur sharpening, and EXIF orientation fix"),
+        ("🔍", "Interactive Canvas", "Confidence color bounding boxes, reading order, and heatmaps"),
+        ("🛡️", "PII Redaction", "Auto-detect Aadhaar, PAN, credit cards with 1-click masking"),
+        ("📊", "Structured Parsing", "Auto-classify document and extract dates, amounts, invoices"),
+        ("🧬", "Embedding Space", "Cluster words in 2D vector space with similarity matrix"),
+        ("📄", "Searchable PDF", "Export with invisible text layer for native Ctrl+F search"),
+        ("📦", "All-In-One ZIP", "Single-click bundle with PDFs, JSON, CSV, and TXT"),
     ]
     for i, (icon, title, desc) in enumerate(features):
         with cols[i % 4]:
             st.markdown(f"""
-            <div class="doc-card" style="min-height:120px;">
-                <div style="font-size:1.8rem; margin-bottom:6px;">{icon}</div>
-                <div style="font-weight:600; color:#e2e8f0; font-size:0.9rem;">{title}</div>
-                <div style="color:#64748b; font-size:0.75rem; margin-top:4px; line-height:1.4;">{desc}</div>
+            <div class="doc-card" style="min-height:130px;">
+                <div style="font-size:1.8rem; margin-bottom:8px;">{icon}</div>
+                <div style="font-weight:700; color:#0f172a; font-size:0.95rem;">{title}</div>
+                <div style="color:#64748b; font-size:0.78rem; margin-top:4px; line-height:1.45;">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
     st.stop()
 
-with st.spinner("🎨 Preprocessing image..."):
-    processed_img, preprocess_meta = full_preprocess(pil_img, mode=preprocess_mode)
 
 # ──────────────────────────────────────────────
-# OCR Inference
+# Preprocessing Pipeline
 # ──────────────────────────────────────────────
-with st.spinner("🧠 Running OCR (GPU accelerated)..."):
-    ocr_results = run_ocr(processed_img, languages=languages, confidence_threshold=confidence_threshold)
+with st.spinner("🎨 Applying image enhancement pipeline..."):
+    # If camera capture, default to camera_enhance mode for optimal results
+    effective_mode = "camera_enhance" if is_camera_input and preprocess_mode == "auto" else preprocess_mode
+    processed_img, preprocess_meta = full_preprocess(pil_img, mode=effective_mode)
+
+
+# ──────────────────────────────────────────────
+# OCR Neural Inference
+# ──────────────────────────────────────────────
+with st.spinner("🧠 Running neural OCR inference (GPU accelerated)..."):
+    ocr_results = run_ocr(
+        processed_img,
+        languages=languages,
+        confidence_threshold=confidence_threshold,
+        camera_mode=(camera_opt or is_camera_input)
+    )
 
 if not ocr_results:
-    st.warning("⚠️ No text detected. Try lowering the confidence threshold or switching to 'binarize' mode.")
+    st.warning("⚠️ No text detected. Try switching the processing mode to 'Camera & Mobile Capture' in the sidebar or lowering the confidence filter.")
     st.stop()
 
 full_text = get_full_text(ocr_results)
-stats = get_statistics(ocr_results)
+accuracy_stats = compute_accuracy_metrics(ocr_results, full_text=full_text)
 
 # PII Redaction
 redacted_text, pii_count = redact_pii(full_text) if auto_redact else (full_text, 0)
 display_text = redacted_text if auto_redact else full_text
 
 # Entity Extraction
-with st.spinner("🔍 Extracting entities..."):
+with st.spinner("🔍 Extracting structured entities..."):
     entities = extract_all(full_text)
 
+
 # ──────────────────────────────────────────────
-# Metrics Row
+# Accuracy & Quality Banner (Light Theme)
 # ──────────────────────────────────────────────
-st.markdown("<br>", unsafe_allow_html=True)
+acc_val = accuracy_stats["overall_accuracy"]
+acc_grade = accuracy_stats["quality_grade"]
+acc_label = accuracy_stats["reliability_label"]
+acc_color = accuracy_stats["reliability_color"]
+
+st.markdown(f"""
+<div class="accuracy-banner">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+        <div style="display:flex; align-items:center; gap:18px;">
+            <div style="width:68px; height:68px; border-radius:50%; background:{acc_color}18; border:3px solid {acc_color}; display:flex; align-items:center; justify-content:center;">
+                <span style="font-size:1.6rem; font-weight:800; color:{acc_color};">{acc_grade}</span>
+            </div>
+            <div>
+                <div style="font-size:0.78rem; text-transform:uppercase; font-weight:700; color:#64748b; letter-spacing:0.05em;">
+                    OCR Accuracy & Quality Score
+                </div>
+                <div style="font-size:1.8rem; font-weight:800; color:#0f172a; line-height:1.2;">
+                    {acc_val}% <span style="font-size:1rem; font-weight:600; color:{acc_color}; margin-left:6px;">• {acc_label}</span>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+            <div style="text-align:right;">
+                <div style="font-size:0.75rem; color:#64748b; font-weight:600;">High Confidence (≥80%)</div>
+                <div style="font-size:1.15rem; font-weight:700; color:#15803d;">{accuracy_stats['high_conf_pct']}% ({accuracy_stats['high_conf_count']} words)</div>
+            </div>
+            <div style="text-align:right; border-left:1px solid #e2e8f0; padding-left:16px;">
+                <div style="font-size:0.75rem; color:#64748b; font-weight:600;">Lexical Validity</div>
+                <div style="font-size:1.15rem; font-weight:700; color:#4338ca;">{accuracy_stats['lexical_validity']}%</div>
+            </div>
+        </div>
+    </div>
+    <!-- Confidence Distribution Bar -->
+    <div style="margin-top:14px; background:#e2e8f0; height:8px; border-radius:999px; overflow:hidden; display:flex;">
+        <div style="width:{accuracy_stats['high_conf_pct']}%; background:#22c55e;" title="High confidence"></div>
+        <div style="width:{accuracy_stats['medium_conf_pct']}%; background:#eab308;" title="Moderate confidence"></div>
+        <div style="width:{accuracy_stats['low_conf_pct']}%; background:#ef4444;" title="Low confidence"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:0.72rem; color:#64748b;">
+        <span>🟢 High: {accuracy_stats['high_conf_pct']}%</span>
+        <span>🟡 Medium: {accuracy_stats['medium_conf_pct']}%</span>
+        <span>🔴 Low: {accuracy_stats['low_conf_pct']}%</span>
+        <span>Total: {accuracy_stats['total_words']} words ({accuracy_stats['total_characters']} characters)</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ──────────────────────────────────────────────
+# Metrics Grid
+# ──────────────────────────────────────────────
 m1, m2, m3, m4, m5 = st.columns(5)
 metrics = [
-    (m1, "Words", stats["total_words"], "badge-indigo"),
-    (m2, "Avg Confidence", f"{stats['avg_confidence']:.1%}", "badge-green"),
-    (m3, "High Conf ≥80%", stats["high_conf_count"], "badge-green"),
-    (m4, "PII Detected", pii_count if auto_redact else "—", "badge-red" if pii_count > 0 else "badge-indigo"),
-    (m5, "Doc Type", entities.get("document_type", "Unknown")[:18], "badge-cyan"),
+    (m1, "Recognized Words", accuracy_stats["total_words"]),
+    (m2, "Avg Confidence", f"{accuracy_stats['avg_confidence']:.1%}"),
+    (m3, "High Quality Words", accuracy_stats["high_conf_count"]),
+    (m4, "PII Detected", pii_count if auto_redact else "—"),
+    (m5, "Document Type", entities.get("document_type", "General")[:18]),
 ]
-for col, label, value, badge_class in metrics:
+for col, label, value in metrics:
     with col:
         st.markdown(f"""
         <div class="metric-card">
-            <div class="metric-value" style="font-size:1.4rem;">{value}</div>
+            <div class="metric-value">{value}</div>
             <div class="metric-label">{label}</div>
         </div>
         """, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+
 # ──────────────────────────────────────────────
-# Tabs
+# Main Application Tabs (Light Mode)
 # ──────────────────────────────────────────────
 tab_vis, tab_search, tab_text, tab_entities, tab_embed, tab_export = st.tabs([
     "🖼️ Visual Canvas",
-    "🔎 Visual Search",
-    "📝 Extracted Text",
+    "🔎 Visual Keyword Search",
+    "📝 Extracted Text & Confidence",
     "🗂️ Entities & PII",
     "🧬 Embedding Space",
-    "📤 Export",
+    "📤 Multi-Format Export",
 ])
+
 
 # ────────────────
 # TAB 1: Visual Canvas
@@ -393,13 +538,25 @@ tab_vis, tab_search, tab_text, tab_entities, tab_embed, tab_export = st.tabs([
 with tab_vis:
     c1, c2 = st.columns([3, 1])
     with c2:
+        st.markdown("##### 🎨 Canvas Layer")
         view_mode = st.radio(
             "Canvas View",
-            ["Bounding Boxes", "Confidence Heatmap", "Reading Order", "Original"],
-            index=0
+            ["Bounding Boxes", "Confidence Heatmap", "Reading Order Flow", "Side-by-Side Comparison"],
+            index=0,
+            label_visibility="collapsed"
         )
-        show_labels = st.toggle("Word Labels", value=True)
-        show_conf = st.toggle("Confidence %", value=True)
+        st.markdown("---")
+        show_labels = st.toggle("Show Word Labels", value=True)
+        show_conf = st.toggle("Show Confidence %", value=True)
+
+        st.markdown("""
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; margin-top:16px;">
+            <div style="font-size:0.75rem; font-weight:700; color:#334155; margin-bottom:6px;">COLOR LEGEND</div>
+            <div style="font-size:0.78rem; color:#15803d; margin-bottom:4px;">🟢 Green: ≥ 80% Confidence</div>
+            <div style="font-size:0.78rem; color:#a16207; margin-bottom:4px;">🟡 Yellow: 50% – 79%</div>
+            <div style="font-size:0.78rem; color:#b91c1c;">🔴 Red: &lt; 50% Confidence</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     with c1:
         if view_mode == "Bounding Boxes":
@@ -408,40 +565,40 @@ with tab_vis:
                 show_labels=show_labels,
                 show_confidence=show_conf,
             )
-            st.image(annotated, use_container_width=True, caption="Bounding Boxes (Green≥80%, Yellow 50-80%, Red<50%)")
+            st.image(annotated, use_container_width=True, caption="Bounding Boxes with Confidence Color Coding")
         elif view_mode == "Confidence Heatmap":
             heatmap_img = create_confidence_heatmap(processed_img, ocr_results)
-            st.image(heatmap_img, use_container_width=True, caption="Confidence Heatmap (Blue=High, Red=Low)")
-        elif view_mode == "Reading Order":
+            st.image(heatmap_img, use_container_width=True, caption="Confidence Heatmap (Blue=High Certainty, Red=Low Certainty)")
+        elif view_mode == "Reading Order Flow":
             order_img = draw_reading_order(processed_img, ocr_results)
-            st.image(order_img, use_container_width=True, caption="Reading Order (numbered arrows)")
+            st.image(order_img, use_container_width=True, caption="Reconstructed Reading Order with Directional Arrows")
         else:
             col_o, col_p = st.columns(2)
             with col_o:
-                st.image(pil_img, caption="Original", use_container_width=True)
+                st.image(pil_img, caption="Original Input", use_container_width=True)
             with col_p:
-                st.image(processed_img, caption=f"Preprocessed ({preprocess_mode})", use_container_width=True)
+                st.image(processed_img, caption=f"Enhanced Preprocessed ({effective_mode})", use_container_width=True)
 
-    # Preprocessing steps info
+    # Preprocessing tags
     st.markdown(f"""
-    <div class="doc-card" style="margin-top:0.5rem;">
-        <span style="color:#64748b; font-size:0.8rem;">Preprocessing applied: </span>
-        {''.join(f'<span class="badge badge-cyan" style="margin-left:4px;">{s}</span>' for s in preprocess_meta.get('steps', []))}
+    <div class="doc-card" style="margin-top:0.8rem; padding:0.8rem 1.2rem;">
+        <span style="color:#64748b; font-size:0.82rem; font-weight:600;">Active Preprocessing Enhancements: </span>
+        {''.join(f'<span class="badge badge-cyan" style="margin-left:6px;">{s.replace("_", " ").title()}</span>' for s in preprocess_meta.get('steps', []))}
     </div>
     """, unsafe_allow_html=True)
 
 
 # ────────────────
-# TAB 2: Visual Search
+# TAB 2: Visual Keyword Search
 # ────────────────
 with tab_search:
     search_col, opts_col = st.columns([3, 1])
     with opts_col:
-        case_sensitive = st.toggle("Case Sensitive", value=False)
+        case_sensitive = st.toggle("Case Sensitive Search", value=False)
     with search_col:
         keyword = st.text_input(
-            "🔎 Search keyword in document",
-            placeholder="Type a word or phrase...",
+            "Search document keyword",
+            placeholder="Type any word or phrase (e.g. invoice, total, patient)...",
             label_visibility="collapsed"
         )
 
@@ -452,71 +609,71 @@ with tab_search:
 
         if matched_texts:
             st.markdown(f"""
-            <div class="doc-card" style="background:rgba(34,197,94,0.08); border-color:rgba(34,197,94,0.4);">
-                <span style="color:#22c55e; font-weight:600;">✓ Found {len(matched_texts)} match(es)</span>
-                <br>
-                {'  '.join(f'<span class="entity-chip" style="background:rgba(234,179,8,0.15);color:#eab308;border:1px solid rgba(234,179,8,0.3);">{t}</span>' for t in matched_texts[:20])}
+            <div class="doc-card" style="background:#f0fdf4; border-color:#bbf7d0;">
+                <span style="color:#15803d; font-weight:700; font-size:1rem;">✓ Found {len(matched_texts)} matching occurrence(s)</span>
+                <div style="margin-top:8px;">
+                    {'  '.join(f'<span class="badge badge-yellow" style="margin-right:4px;">{t}</span>' for t in matched_texts[:20])}
+                </div>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
-            <div class="doc-card" style="background:rgba(239,68,68,0.08); border-color:rgba(239,68,68,0.4);">
-                <span style="color:#ef4444; font-weight:600;">✗ No matches for "{keyword}"</span>
+            <div class="doc-card" style="background:#fef2f2; border-color:#fecaca;">
+                <span style="color:#b91c1c; font-weight:700;">✗ No text matching "{keyword}" was found in the document.</span>
             </div>
             """, unsafe_allow_html=True)
 
-        st.image(highlighted_img, use_container_width=True,
-                 caption=f"Search Results: '{keyword}' highlighted in gold")
+        st.image(highlighted_img, use_container_width=True, caption=f"Spatial Search Overlay: '{keyword}' highlighted in gold")
     else:
-        st.info("👆 Enter a keyword above to highlight its position on the document canvas.")
+        st.info("👆 Enter a word or phrase above to instantly highlight its exact physical position on the document.")
         st.image(processed_img, use_container_width=True, caption="Document Preview")
 
 
 # ────────────────
-# TAB 3: Extracted Text
+# TAB 3: Extracted Text & Quality Table
 # ────────────────
 with tab_text:
     c1, c2 = st.columns([2, 1])
     with c1:
         st.markdown(f"""<div class="doc-card">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <span style="font-weight:600; color:#e2e8f0;">
-                    Extracted Text
+                <span style="font-weight:700; color:#0f172a; font-size:1.05rem;">
+                    Extracted Text Content
                     {'<span class="badge badge-red" style="margin-left:8px;">PII REDACTED</span>' if auto_redact and pii_count > 0 else ''}
                 </span>
-                <span style="font-size:0.75rem; color:#64748b;">
-                    {len(display_text.split())} words · {len(display_text)} chars
+                <span style="font-size:0.8rem; color:#64748b; font-weight:600;">
+                    {len(display_text.split())} words · {len(display_text)} characters
                 </span>
             </div>
         </div>""", unsafe_allow_html=True)
         st.text_area(
             "Extracted Text Content",
             value=display_text,
-            height=380,
+            height=400,
             label_visibility="collapsed",
-            help="Select all and Ctrl+C to copy, or edit text directly."
+            help="Select all and copy with Ctrl+C, or edit freely."
         )
 
     with c2:
-        st.markdown("#### 📊 Word Confidence Table")
+        st.markdown("#### 📊 Word Recognition Table")
         df = pd.DataFrame([{
             "Text": r["text"],
             "Confidence": f"{r['confidence']:.1%}",
             "Width": r["width"],
             "Height": r["height"],
         } for r in sorted(ocr_results, key=lambda x: x["confidence"], reverse=True)])
-        st.dataframe(df, use_container_width=True, height=420)
+        st.dataframe(df, use_container_width=True, height=430)
 
 
 # ────────────────
 # TAB 4: Entities & PII
 # ────────────────
 with tab_entities:
-    doc_type = entities.get("document_type", "Unknown")
+    doc_type = entities.get("document_type", "General Document")
     st.markdown(f"""
-    <div class="doc-card" style="background:linear-gradient(135deg,rgba(99,102,241,0.12),rgba(139,92,246,0.08));">
-        <span style="color:#94a3b8; font-size:0.8rem;">CLASSIFIED AS</span>
-        <div style="font-size:1.5rem; font-weight:700; color:#818cf8; margin-top:4px;">📋 {doc_type}</div>
+    <div class="doc-card" style="background:linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); border-color:#c7d2fe;">
+        <span style="color:#4338ca; font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">CLASSIFIED DOCUMENT TYPE</span>
+        <div style="font-size:1.6rem; font-weight:800; color:#1e1b4b; margin-top:4px;">📋 {doc_type}</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -526,31 +683,31 @@ with tab_entities:
         # Dates
         dates = entities.get("dates", [])
         st.markdown(f"""<div class="doc-card">
-            <div style="font-weight:600;color:#e2e8f0;margin-bottom:8px;">📅 Dates ({len(dates)})</div>
-            {''.join(f'<span class="entity-chip" style="background:rgba(6,182,212,0.12);color:#22d3ee;border:1px solid rgba(6,182,212,0.3);">{d}</span>' for d in dates) if dates else '<span style="color:#475569;font-size:0.82rem;">None detected</span>'}
+            <div style="font-weight:700; color:#0f172a; margin-bottom:8px;">📅 Detected Dates ({len(dates)})</div>
+            {''.join(f'<span class="badge badge-cyan" style="margin:2px 3px;">{d}</span>' for d in dates) if dates else '<span style="color:#94a3b8; font-size:0.84rem;">None detected</span>'}
         </div>""", unsafe_allow_html=True)
 
         # Amounts
         amounts = entities.get("amounts", [])
         st.markdown(f"""<div class="doc-card">
-            <div style="font-weight:600;color:#e2e8f0;margin-bottom:8px;">💰 Amounts ({len(amounts)})</div>
-            {''.join(f'<span class="entity-chip" style="background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);">{a}</span>' for a in amounts) if amounts else '<span style="color:#475569;font-size:0.82rem;">None detected</span>'}
+            <div style="font-weight:700; color:#0f172a; margin-bottom:8px;">💰 Monetary Amounts ({len(amounts)})</div>
+            {''.join(f'<span class="badge badge-green" style="margin:2px 3px;">{a}</span>' for a in amounts) if amounts else '<span style="color:#94a3b8; font-size:0.84rem;">None detected</span>'}
         </div>""", unsafe_allow_html=True)
 
-        # Contact
+        # Contact Info
         emails = entities.get("emails", [])
         phones = entities.get("phones", [])
         urls = entities.get("urls", [])
         st.markdown(f"""<div class="doc-card">
-            <div style="font-weight:600;color:#e2e8f0;margin-bottom:8px;">📬 Contact Info</div>
-            {''.join(f'<span class="entity-chip" style="background:rgba(99,102,241,0.12);color:#818cf8;border:1px solid rgba(99,102,241,0.3);">✉ {e}</span>' for e in emails)}
-            {''.join(f'<span class="entity-chip" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.3);">📞 {p}</span>' for p in phones)}
-            {''.join(f'<span class="entity-chip" style="background:rgba(6,182,212,0.12);color:#22d3ee;border:1px solid rgba(6,182,212,0.3);">🔗 {u[:30]}...</span>' for u in urls[:3])}
-            {'<span style="color:#475569;font-size:0.82rem;">None detected</span>' if not emails and not phones and not urls else ''}
+            <div style="font-weight:700; color:#0f172a; margin-bottom:8px;">📬 Contact Information</div>
+            {''.join(f'<span class="badge badge-indigo" style="margin:2px 3px;">✉ {e}</span>' for e in emails)}
+            {''.join(f'<span class="badge badge-indigo" style="margin:2px 3px;">📞 {p}</span>' for p in phones)}
+            {''.join(f'<span class="badge badge-cyan" style="margin:2px 3px;">🔗 {u[:28]}...</span>' for u in urls[:3])}
+            {'<span style="color:#94a3b8; font-size:0.84rem;">None detected</span>' if not emails and not phones and not urls else ''}
         </div>""", unsafe_allow_html=True)
 
     with col_b:
-        # Invoice fields
+        # Key Document Fields
         inv = entities.get("invoice_fields", {})
         FIELD_ICONS = {
             "invoice_number": "🧾",
@@ -569,62 +726,66 @@ with tab_entities:
                 icon = FIELD_ICONS.get(k, "📌")
                 title = k.replace('_', ' ').title()
                 inv_rows.append(f"""
-                <div style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; margin-bottom:6px; background:rgba(15,23,42,0.6); border:1px solid rgba(99,102,241,0.18); border-radius:10px;">
-                    <span style="color:#94a3b8; font-size:0.84rem; display:flex; align-items:center; gap:6px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; margin-bottom:8px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px;">
+                    <span style="color:#475569; font-size:0.86rem; display:flex; align-items:center; gap:8px;">
                         <span>{icon}</span>
-                        <strong style="color:#cbd5e1; font-weight:500;">{title}</strong>
+                        <strong style="color:#1e293b; font-weight:600;">{title}</strong>
                     </span>
-                    <span style="color:#38bdf8; font-size:0.86rem; font-weight:600; font-family:monospace; background:rgba(56,189,248,0.1); padding:2px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.25);">
+                    <span style="color:#0369a1; font-size:0.88rem; font-weight:700; font-family:monospace; background:#e0f2fe; padding:3px 10px; border-radius:6px; border:1px solid #bae6fd;">
                         {v}
                     </span>
                 </div>""")
             inv_html = "".join(inv_rows)
             st.markdown(f"""<div class="doc-card">
-                <div style="font-weight:600; color:#e2e8f0; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
-                    <span>🧾 Key Document Fields</span>
-                    <span class="badge badge-cyan">{len(inv)} detected</span>
+                <div style="font-weight:700; color:#0f172a; margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
+                    <span>🧾 Extracted Key-Value Fields</span>
+                    <span class="badge badge-indigo">{len(inv)} detected</span>
                 </div>
                 {inv_html}
             </div>""", unsafe_allow_html=True)
         else:
             st.markdown("""<div class="doc-card">
-                <div style="font-weight:600; color:#e2e8f0; margin-bottom:6px;">🧾 Key Document Fields</div>
-                <div style="color:#64748b; font-size:0.82rem;">No structured invoice or PO fields detected in this document.</div>
+                <div style="font-weight:700; color:#0f172a; margin-bottom:6px;">🧾 Key-Value Fields</div>
+                <div style="color:#94a3b8; font-size:0.84rem;">No invoice or purchase order key-value fields detected.</div>
             </div>""", unsafe_allow_html=True)
 
-        # PII
+        # PII Detected
         pii = entities.get("pii", {})
         pii_found = {k: v for k, v in pii.items() if v}
         if pii_found:
             pii_html = "".join(f"""
-            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(239,68,68,0.1);">
-                <span style="color:#ef4444;font-size:0.82rem;">⚠ {k.upper()}</span>
-                <span style="color:#fca5a5;font-size:0.82rem;">{len(v)} found</span>
+            <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #fee2e2;">
+                <span style="color:#b91c1c; font-size:0.86rem; font-weight:600;">⚠ {k.upper()}</span>
+                <span style="color:#b91c1c; font-size:0.84rem; font-weight:700;">{len(v)} detected</span>
             </div>""" for k, v in pii_found.items())
-            st.markdown(f"""<div class="doc-card" style="border-color:rgba(239,68,68,0.3); background:rgba(239,68,68,0.05);">
-                <div style="font-weight:600;color:#ef4444;margin-bottom:8px;">🛡️ PII Detected</div>
+            st.markdown(f"""<div class="doc-card" style="border-color:#fecaca; background:#fff5f5;">
+                <div style="font-weight:700; color:#b91c1c; margin-bottom:8px;">🛡️ Sensitive PII Detected</div>
                 {pii_html}
-                <div style="margin-top:10px;font-size:0.75rem;color:#64748b;">Enable "Auto-redact PII" in sidebar to redact from exported text.</div>
+                <div style="margin-top:10px; font-size:0.78rem; color:#64748b;">
+                    Enable "Auto-Redact PII" in the sidebar to mask these identifiers before export.
+                </div>
             </div>""", unsafe_allow_html=True)
         else:
-            st.markdown("""<div class="doc-card" style="border-color:rgba(34,197,94,0.3); background:rgba(34,197,94,0.05);">
-                <div style="font-weight:600;color:#22c55e;margin-bottom:4px;">✅ No PII Detected</div>
-                <div style="font-size:0.8rem;color:#64748b;">No Aadhaar, PAN, credit card, or SSN patterns found.</div>
+            st.markdown("""<div class="doc-card" style="border-color:#bbf7d0; background:#f0fdf4;">
+                <div style="font-weight:700; color:#15803d; margin-bottom:4px;">✅ No Sensitive PII Found</div>
+                <div style="font-size:0.82rem; color:#64748b;">No Aadhaar, PAN, SSN, or credit card patterns detected.</div>
             </div>""", unsafe_allow_html=True)
 
 
 # ────────────────
-# TAB 5: Embedding Space
+# TAB 5: Embedding Space (Light Theme)
 # ────────────────
 with tab_embed:
     st.markdown("""<div class="doc-card">
-        <div style="font-weight:600;color:#e2e8f0;margin-bottom:4px;">🧬 Semantic Embedding Vector Space</div>
-        <div style="color:#64748b;font-size:0.82rem;">Each point represents a text unit projected to 2D using dimensionality reduction.
-        Semantically similar words/phrases cluster together. Colors = K-Means clusters.</div>
+        <div style="font-weight:700; color:#0f172a; margin-bottom:4px;">🧬 Semantic Vector Space Visualization</div>
+        <div style="color:#64748b; font-size:0.85rem;">
+            Converts text units into 384-dimensional dense semantic vectors using <code>all-MiniLM-L6-v2</code>, 
+            then projects to 2D space. Words with related meanings cluster together automatically.
+        </div>
     </div>""", unsafe_allow_html=True)
 
-    if st.button("⚡ Generate Embedding Visualization", type="primary"):
-        with st.spinner("🔢 Embedding text with sentence-transformers..."):
+    if st.button("⚡ Generate Embedding Space", type="primary"):
+        with st.spinner("🔢 Calculating sentence embeddings and 2D projection..."):
             embed_data = build_embedding_data(
                 ocr_results,
                 text_unit=embed_unit,
@@ -636,33 +797,13 @@ with tab_embed:
             coords = np.array(embed_data["coords_2d"])
             texts = embed_data["texts"]
             labels = embed_data["cluster_labels"]
-            dim = embed_data["embedding_dim"]
 
-            # Metric row
-            mc1, mc2, mc3 = st.columns(3)
-            for col, val, lab in [
-                (mc1, embed_data["n_texts"], f"{embed_unit.title()}s Embedded"),
-                (mc2, dim, "Embedding Dimensions"),
-                (mc3, embed_data["reduction_method"], "Reduction Method"),
-            ]:
-                with col:
-                    st.markdown(f"""<div class="metric-card">
-                        <div class="metric-value">{val}</div>
-                        <div class="metric-label">{lab}</div>
-                    </div>""", unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Scatter plot
             CLUSTER_COLORS = [
-                "#6366f1", "#22d3ee", "#22c55e", "#eab308", "#f97316",
-                "#ec4899", "#a78bfa", "#34d399", "#fb923c", "#38bdf8"
+                "#4f46e5", "#0284c7", "#16a34a", "#ca8a04", "#ea580c",
+                "#db2777", "#7c3aed", "#059669", "#d97706", "#2563eb"
             ]
-            color_list = [CLUSTER_COLORS[l % len(CLUSTER_COLORS)] for l in labels]
 
             fig = go.Figure()
-
-            # Plot each cluster as separate trace for legend
             unique_labels = sorted(set(labels))
             for cluster_id in unique_labels:
                 idx = [i for i, l in enumerate(labels) if l == cluster_id]
@@ -671,7 +812,6 @@ with tab_embed:
                 y_vals = [coords[i, 1] for i in idx]
                 color = CLUSTER_COLORS[cluster_id % len(CLUSTER_COLORS)]
 
-                # Ellipse hull (convex hull approximation via scatter)
                 fig.add_trace(go.Scatter(
                     x=x_vals,
                     y=y_vals,
@@ -679,132 +819,91 @@ with tab_embed:
                     name=f"Cluster {cluster_id + 1}",
                     marker=dict(
                         color=color,
-                        size=9,
-                        opacity=0.85,
-                        line=dict(width=1.5, color="rgba(255,255,255,0.3)"),
+                        size=10,
+                        opacity=0.9,
+                        line=dict(width=1.5, color="#ffffff"),
                     ),
-                    text=[t[:20] for t in cluster_texts],
+                    text=[t[:18] for t in cluster_texts],
                     textposition="top center",
-                    textfont=dict(size=9, color="rgba(255,255,255,0.7)"),
-                    hovertemplate="<b>%{customdata}</b><br>x=%{x:.3f}, y=%{y:.3f}<extra></extra>",
+                    textfont=dict(size=10, color="#1e293b"),
+                    hovertemplate="<b>%{customdata}</b><br>x=%{x:.2f}, y=%{y:.2f}<extra></extra>",
                     customdata=cluster_texts,
                 ))
 
             fig.update_layout(
                 title=dict(
-                    text=f"<b>Embedding Space</b> — {embed_unit.title()}s via {embed_reduction}",
-                    font=dict(size=16, color="#e2e8f0"),
+                    text=f"<b>Semantic Embedding Space</b> — {embed_unit.title()}s via {embed_reduction}",
+                    font=dict(size=16, color="#0f172a"),
                 ),
-                paper_bgcolor="rgba(15,23,42,0)",
-                plot_bgcolor="rgba(15,23,42,0.7)",
-                font=dict(color="#94a3b8", size=11),
+                paper_bgcolor="#ffffff",
+                plot_bgcolor="#f8fafc",
+                font=dict(color="#334155", size=11),
                 xaxis=dict(
-                    title=f"{embed_reduction} Dim 1",
-                    gridcolor="rgba(99,102,241,0.1)",
-                    zerolinecolor="rgba(99,102,241,0.2)",
+                    title=f"{embed_reduction} Axis 1",
+                    gridcolor="#e2e8f0",
+                    zerolinecolor="#cbd5e1",
                     title_font_color="#64748b",
                 ),
                 yaxis=dict(
-                    title=f"{embed_reduction} Dim 2",
-                    gridcolor="rgba(99,102,241,0.1)",
-                    zerolinecolor="rgba(99,102,241,0.2)",
+                    title=f"{embed_reduction} Axis 2",
+                    gridcolor="#e2e8f0",
+                    zerolinecolor="#cbd5e1",
                     title_font_color="#64748b",
                 ),
                 legend=dict(
-                    bgcolor="rgba(30,41,59,0.8)",
-                    bordercolor="rgba(99,102,241,0.3)",
+                    bgcolor="#ffffff",
+                    bordercolor="#e2e8f0",
                     borderwidth=1,
-                    font=dict(color="#94a3b8"),
+                    font=dict(color="#334155"),
                 ),
                 height=520,
                 margin=dict(l=10, r=10, t=50, b=10),
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # Embedding raw values table
-            with st.expander("🔢 Raw Embedding Vectors (first 8 dimensions)"):
-                emb_array = embed_data["embeddings"]
-                n_show = min(20, len(texts))
-                table_data = {
-                    "Text": texts[:n_show],
-                    "Cluster": [f"C{l+1}" for l in labels[:n_show]],
-                }
-                n_dims = min(8, emb_array.shape[1])
-                for d in range(n_dims):
-                    table_data[f"dim_{d+1}"] = [f"{emb_array[i, d]:.4f}" for i in range(n_show)]
-                st.dataframe(pd.DataFrame(table_data), use_container_width=True)
-
-            # Cosine Similarity Heatmap
+            # Cosine similarity heatmap
             sim_matrix = embed_data.get("similarity_matrix")
-            if sim_matrix is not None and len(texts) <= 40:
+            if sim_matrix is not None and len(texts) <= 35:
                 st.markdown("#### 🌡️ Semantic Similarity Heatmap")
-                n = len(texts)
-                short_labels = [t[:15] + ("…" if len(t) > 15 else "") for t in texts]
+                short_labels = [t[:14] + ("…" if len(t) > 14 else "") for t in texts]
                 fig_heat = px.imshow(
                     sim_matrix,
                     x=short_labels,
                     y=short_labels,
-                    color_continuous_scale=[
-                        [0.0, "rgba(15,23,42,1)"],
-                        [0.3, "rgba(67,56,202,1)"],
-                        [0.6, "rgba(99,102,241,1)"],
-                        [0.8, "rgba(139,92,246,1)"],
-                        [1.0, "rgba(6,182,212,1)"],
-                    ],
+                    color_continuous_scale="Viridis",
                     zmin=0, zmax=1,
                     aspect="auto",
-                    title="<b>Cosine Similarity Between Text Units</b>",
+                    title="<b>Cosine Similarity Heatmap</b>",
                 )
                 fig_heat.update_layout(
-                    paper_bgcolor="rgba(15,23,42,0)",
-                    plot_bgcolor="rgba(15,23,42,0.7)",
-                    font=dict(color="#94a3b8", size=9),
-                    height=500,
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#f8fafc",
+                    font=dict(color="#334155", size=9),
+                    height=480,
                     margin=dict(l=10, r=10, t=50, b=10),
                 )
                 st.plotly_chart(fig_heat, use_container_width=True)
-
-            # Top similar pairs
-            similar_pairs = embed_data.get("similar_pairs", [])
-            if similar_pairs:
-                st.markdown("#### 🔗 Top Semantically Similar Pairs")
-                pairs_df = pd.DataFrame([{
-                    "Text A": p["text_i"],
-                    "Text B": p["text_j"],
-                    "Similarity": f"{p['similarity']:.1%}",
-                } for p in similar_pairs[:10]])
-                st.dataframe(pairs_df, use_container_width=True)
-
         else:
-            st.warning("⚠️ Not enough text to generate embeddings. Try processing an image with more text.")
+            st.warning("⚠️ Document text is too brief to compute clusters. Try an image with more paragraphs.")
     else:
-        st.markdown("""<div style="text-align:center;padding:3rem;color:#475569;">
-            <div style="font-size:3rem; margin-bottom:1rem;">🧬</div>
-            <div style="font-size:1rem;color:#64748b;">Click the button above to generate the embedding space visualization.<br>
-            This uses <code>sentence-transformers/all-MiniLM-L6-v2</code> to convert each text unit into a 384-dim vector,
-            then reduces to 2D for visualization.</div>
-        </div>""", unsafe_allow_html=True)
+        st.info("👆 Click the button above to project words into semantic vector space.")
 
 
 # ────────────────
-# TAB 6: Export
+# TAB 6: Multi-Format Export
 # ────────────────
 with tab_export:
     st.markdown("""<div class="doc-card">
-        <div style="font-weight:600;color:#e2e8f0;margin-bottom:4px;">📤 Export Formats & Downloads</div>
-        <div style="color:#64748b;font-size:0.82rem;">Download your processed document in multiple formats or grab the all-in-one ZIP archive.</div>
+        <div style="font-weight:700; color:#0f172a; margin-bottom:4px;">📤 Multi-Format Export Center</div>
+        <div style="color:#64748b; font-size:0.85rem;">Download your processed document in standard formats or grab the complete archive.</div>
     </div>""", unsafe_allow_html=True)
 
     base_doc_stem = os.path.splitext(doc_name)[0]
 
-    # One-click all formats bundle
-    st.markdown("""
-    <div style="margin-bottom:12px;">
-        <span style="font-size:0.88rem; font-weight:600; color:#818cf8;">📦 All-In-One Bundle</span>
-    </div>
-    """, unsafe_allow_html=True)
-    if st.button("🗜️ Prepare Complete Export Bundle (ZIP)", type="primary", use_container_width=True):
-        with st.spinner("Bundling all formats (PDFs, JSON, CSV, TXT) into ZIP archive..."):
+    # One-click bundle ZIP
+    st.markdown("##### 📦 All-In-One Bundle")
+    if st.button("🗜️ Generate Complete Export Package (.ZIP)", type="primary", use_container_width=True):
+        with st.spinner("Bundling Searchable PDF, Audit Report, JSON, CSV, and Plain Text..."):
             zip_bytes = export_bundle_zip(processed_img, ocr_results, entities, display_text, base_name=base_doc_stem)
         st.download_button(
             "⬇️ Download All Formats (.ZIP Archive)",
@@ -814,19 +913,15 @@ with tab_export:
             use_container_width=True,
         )
 
-    st.markdown("<hr style='margin:1.2rem 0;'>", unsafe_allow_html=True)
-    st.markdown("""
-    <div style="margin-bottom:12px;">
-        <span style="font-size:0.88rem; font-weight:600; color:#cbd5e1;">📄 Individual Formats</span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("<hr style='margin:1.4rem 0; border-color:#e2e8f0;'>", unsafe_allow_html=True)
+    st.markdown("##### 📄 Individual Formats")
 
     ec1, ec2 = st.columns(2)
 
     with ec1:
         # Searchable PDF
         if st.button("📄 Generate Searchable PDF", use_container_width=True):
-            with st.spinner("Generating searchable PDF..."):
+            with st.spinner("Generating searchable PDF with invisible text layer..."):
                 pdf_bytes = export_searchable_pdf(processed_img, ocr_results, doc_name)
             st.download_button(
                 "⬇️ Download Searchable PDF",
@@ -836,23 +931,23 @@ with tab_export:
                 use_container_width=True,
             )
 
-        # Annotated PDF
-        if st.button("📊 Generate Annotated Report PDF", use_container_width=True):
-            with st.spinner("Generating annotated PDF report..."):
+        # Annotated Audit PDF
+        if st.button("📊 Generate Annotated Audit Report (PDF)", use_container_width=True):
+            with st.spinner("Generating annotated audit PDF report..."):
                 annotated_img = draw_bounding_boxes(processed_img, ocr_results, show_labels=True, show_confidence=True)
                 pdf_bytes = export_annotated_pdf(annotated_img, ocr_results, entities, title="DocIQ OCR Report")
             st.download_button(
-                "⬇️ Download Annotated PDF",
+                "⬇️ Download Annotated PDF Report",
                 data=pdf_bytes,
-                file_name=f"{base_doc_stem}_report.pdf",
+                file_name=f"{base_doc_stem}_audit_report.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
 
         # JSON
-        json_bytes = export_json(ocr_results, entities, {"filename": doc_name})
+        json_bytes = export_json(ocr_results, entities, {"filename": doc_name, "accuracy": accuracy_stats})
         st.download_button(
-            "⬇️ Download Structured JSON",
+            "⬇️ Download Structured JSON Data",
             data=json_bytes,
             file_name=f"{base_doc_stem}_data.json",
             mime="application/json",
@@ -863,7 +958,7 @@ with tab_export:
         # CSV
         csv_bytes = export_csv(ocr_results, entities)
         st.download_button(
-            "⬇️ Download CSV / Excel",
+            "⬇️ Download Words Table (CSV / Excel)",
             data=csv_bytes,
             file_name=f"{base_doc_stem}_words.csv",
             mime="text/csv",
@@ -873,14 +968,14 @@ with tab_export:
         # Plain Text
         txt_bytes = export_txt(ocr_results, full_text=display_text)
         st.download_button(
-            f"⬇️ Download Plain Text {'(Redacted)' if auto_redact else ''}",
+            f"⬇️ Download Clean Plain Text {'(Redacted)' if auto_redact else ''}",
             data=txt_bytes,
             file_name=f"{base_doc_stem}_text.txt",
             mime="text/plain",
             use_container_width=True,
         )
 
-        # Export entity summary
+        # Entity Summary JSON
         st.download_button(
             "⬇️ Download Entity Summary (JSON)",
             data=export_json([], entities, {"filename": doc_name, "type": "entities_only"}),
@@ -890,12 +985,12 @@ with tab_export:
         )
 
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("""<div class="doc-card" style="background:rgba(99,102,241,0.06);">
-        <div style="font-weight:600;color:#818cf8;margin-bottom:8px;">📋 Export Format Guide</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-            <div><span style="color:#22d3ee;font-weight:500;">Searchable PDF</span><br><span style="color:#475569;font-size:0.78rem;">Image + invisible text layer. Ctrl+F search works natively in any PDF viewer.</span></div>
-            <div><span style="color:#22d3ee;font-weight:500;">Annotated PDF</span><br><span style="color:#475569;font-size:0.78rem;">Bounding box image + entity table + confidence table. Great for audit trails.</span></div>
-            <div><span style="color:#22d3ee;font-weight:500;">Structured JSON</span><br><span style="color:#475569;font-size:0.78rem;">Full word coordinates, confidence, entities. Ready for downstream NLP pipelines.</span></div>
-            <div><span style="color:#22d3ee;font-weight:500;">CSV / Excel</span><br><span style="color:#475569;font-size:0.78rem;">Tabular word data + entity section. Open directly in Excel or Google Sheets.</span></div>
+    st.markdown("""<div class="doc-card" style="background:#f8fafc;">
+        <div style="font-weight:700; color:#334155; margin-bottom:8px;">📋 Export Formats Reference</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div><strong style="color:#0284c7;">Searchable PDF</strong><br><span style="color:#64748b; font-size:0.8rem;">Contains hidden text layer. Native Ctrl+F search works in Adobe Acrobat, Chrome, and Preview.</span></div>
+            <div><strong style="color:#0284c7;">Annotated PDF Report</strong><br><span style="color:#64748b; font-size:0.8rem;">Visual bounding box document map, accuracy scores, and word-by-word audit trail.</span></div>
+            <div><strong style="color:#0284c7;">Structured JSON</strong><br><span style="color:#64748b; font-size:0.8rem;">Precise pixel coordinates, confidence ratings, and parsed entities for downstream pipelines.</span></div>
+            <div><strong style="color:#0284c7;">CSV / Excel</strong><br><span style="color:#64748b; font-size:0.8rem;">Tabular dataset ready to import directly into Microsoft Excel, Google Sheets, or Pandas.</span></div>
         </div>
     </div>""", unsafe_allow_html=True)
