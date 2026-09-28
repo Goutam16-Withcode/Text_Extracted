@@ -31,7 +31,15 @@ from src.ocr_engine import run_ocr, get_full_text, get_statistics
 from src.visualizer import draw_bounding_boxes, search_and_highlight, create_confidence_heatmap, draw_reading_order
 from src.extractor import extract_all, redact_pii
 from src.embedder import build_embedding_data
-from src.exporter import export_json, export_csv, export_txt, export_searchable_pdf, export_annotated_pdf
+from src.exporter import (
+    export_json,
+    export_csv,
+    export_txt,
+    export_searchable_pdf,
+    export_annotated_pdf,
+    export_bundle_zip,
+)
+from src.sample_docs import SAMPLE_DOCUMENTS
 
 
 # ──────────────────────────────────────────────

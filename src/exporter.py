@@ -257,3 +257,40 @@ def export_annotated_pdf(
     doc.build(story)
     buffer.seek(0)
     return buffer.read()
+
+
+def export_bundle_zip(
+    processed_img: Image.Image,
+    ocr_results: List[Dict],
+    entities: Dict,
+    full_text: str,
+    base_name: str = "document",
+) -> bytes:
+    """Generate a single ZIP archive containing all export formats."""
+    import zipfile
+    from src.visualizer import draw_bounding_boxes
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        # JSON
+        zip_file.writestr(f"{base_name}_data.json", export_json(ocr_results, entities, {"filename": base_name}))
+        # CSV
+        zip_file.writestr(f"{base_name}_words.csv", export_csv(ocr_results, entities))
+        # Plain text
+        zip_file.writestr(f"{base_name}_text.txt", export_txt(ocr_results, full_text=full_text))
+        # Searchable PDF
+        try:
+            searchable_pdf = export_searchable_pdf(processed_img, ocr_results, base_name)
+            zip_file.writestr(f"{base_name}_searchable.pdf", searchable_pdf)
+        except Exception:
+            pass
+        # Annotated PDF
+        try:
+            annotated_img = draw_bounding_boxes(processed_img, ocr_results, show_labels=True, show_confidence=True)
+            report_pdf = export_annotated_pdf(annotated_img, ocr_results, entities, title=f"DocIQ Report - {base_name}")
+            zip_file.writestr(f"{base_name}_report.pdf", report_pdf)
+        except Exception:
+            pass
+
+    zip_buffer.seek(0)
+    return zip_buffer.read()
