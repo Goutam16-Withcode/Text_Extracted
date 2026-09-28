@@ -81,8 +81,13 @@ html, body, [data-testid="stAppViewContainer"], .stApp {
 
 .stApp > header { background: #f8fafc !important; }
 
-/* Force light text color on all generic markdown elements */
-p, span, label, div.stMarkdown, [data-testid="stWidgetLabel"] {
+/* Force light text color on ALL elements */
+*, p, span, label, h1, h2, h3, h4, h5, h6, div {
+    color: #1e293b;
+}
+div.stMarkdown, [data-testid="stWidgetLabel"] label,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stMarkdownContainer"] p {
     color: #1e293b !important;
 }
 
@@ -93,8 +98,47 @@ section[data-testid="stSidebar"], [data-testid="stSidebarContent"], [data-testid
     border-right: 1px solid #e2e8f0 !important;
     box-shadow: 2px 0 16px rgba(15, 23, 42, 0.03) !important;
 }
-section[data-testid="stSidebar"] * {
+section[data-testid="stSidebar"] *,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] div {
     color: #334155 !important;
+}
+
+/* Toggle / Checkbox fix */
+[data-testid="stToggle"] label, [data-testid="stToggle"] p,
+[data-testid="stCheckbox"] label, [data-testid="stCheckbox"] p {
+    color: #334155 !important;
+    font-weight: 500 !important;
+}
+
+/* Multiselect selected items text */
+[data-baseweb="tag"] span { color: #4338ca !important; }
+
+/* Slider value label */
+[data-testid="stSlider"] [data-testid="stTickBarMin"],
+[data-testid="stSlider"] [data-testid="stTickBarMax"],
+[data-testid="stSlider"] p { color: #334155 !important; }
+
+/* Tab labels – always visible */
+.stTabs [role="tab"] span, .stTabs [role="tab"] p {
+    color: #64748b !important;
+}
+.stTabs [aria-selected="true"] span,
+.stTabs [aria-selected="true"] p {
+    color: #ffffff !important;
+}
+
+/* Expander header */
+[data-testid="stExpander"] summary p {
+    color: #1e293b !important;
+    font-weight: 600 !important;
+}
+
+/* Success / warning / error message text */
+[data-testid="stAlert"] p, [data-testid="stAlert"] div {
+    color: #1e293b !important;
 }
 
 /* Cards */
@@ -465,16 +509,57 @@ with input_tab2:
 
 with input_tab3:
     st.markdown("""
-    <div style="color:#64748b; font-size:0.88rem; margin-bottom: 0.5rem;">
-        Take a live photo of a document using your webcam or mobile camera. 
-        DocIQ automatically normalizes EXIF orientation, compensates for shadows, and sharpens text.
+    <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:1rem 1.2rem; margin-bottom:1rem;">
+        <div style="font-weight:700; color:#1d4ed8; font-size:0.95rem; margin-bottom:4px;">📸 Live Camera Scanner</div>
+        <div style="color:#1e40af; font-size:0.84rem; line-height:1.5;">
+            Click <strong>Enable Camera</strong> to turn on your webcam, take a photo of any document,
+            and DocIQ will extract all text from it. The image is shown in its natural colors — OCR runs on the original.
+        </div>
     </div>
     """, unsafe_allow_html=True)
-    cam_file = st.camera_input("Capture document with camera", key="camera_scanner_input")
-    if cam_file is not None:
-        pil_img = Image.open(cam_file).convert("RGB")
-        doc_name = "camera_capture.png"
-        is_camera_input = True
+
+    # Camera is OFF by default — only enable when user explicitly clicks the button
+    if "camera_enabled" not in st.session_state:
+        st.session_state["camera_enabled"] = False
+
+    col_cam_btn, col_cam_info = st.columns([1, 3])
+    with col_cam_btn:
+        if not st.session_state["camera_enabled"]:
+            if st.button("📷 Enable Camera", key="btn_enable_camera", use_container_width=True):
+                st.session_state["camera_enabled"] = True
+                st.rerun()
+        else:
+            if st.button("🔴 Disable Camera", key="btn_disable_camera", use_container_width=True):
+                st.session_state["camera_enabled"] = False
+                st.session_state.pop("camera_capture", None)
+                st.rerun()
+    with col_cam_info:
+        if st.session_state["camera_enabled"]:
+            st.markdown("""
+            <div style="color:#15803d; font-size:0.84rem; padding:0.4rem 0; font-weight:600;">
+                ✅ Camera is ON — point at your document and click the capture button below
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style="color:#64748b; font-size:0.84rem; padding:0.4rem 0;">
+                Camera is off. Click Enable Camera to start your webcam.
+            </div>""", unsafe_allow_html=True)
+
+    if st.session_state["camera_enabled"]:
+        cam_file = st.camera_input(
+            "📷 Point at your document and capture",
+            key="camera_scanner_input",
+            help="Position the document clearly, ensure good lighting, then click the capture button."
+        )
+        if cam_file is not None:
+            pil_img = Image.open(cam_file).convert("RGB")
+            doc_name = "camera_capture.png"
+            is_camera_input = True
+            # Show preview of the natural captured image
+            st.markdown("""
+            <div style="color:#15803d; font-weight:600; font-size:0.9rem; margin:0.5rem 0 0.3rem;">✅ Image captured! OCR will run on the natural original image below:</div>
+            """, unsafe_allow_html=True)
+            st.image(pil_img, caption="📸 Captured Document (Natural Colors — OCR input)", use_container_width=True)
 
 
 # ──────────────────────────────────────────────
@@ -506,10 +591,26 @@ if pil_img is None:
 
 
 # ──────────────────────────────────────────────
-# Preprocessing Pipeline
+# Show Natural Image Preview (always original colors)
 # ──────────────────────────────────────────────
-with st.spinner("🎨 Applying image enhancement pipeline..."):
-    # If camera capture, default to camera_enhance mode for optimal results
+if not is_camera_input:  # Camera tab already shows its own preview
+    st.markdown("""
+    <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px;
+                padding:0.8rem 1.2rem; margin-bottom:0.8rem; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:1.2rem;">🖼️</span>
+        <div>
+            <div style="font-weight:700; color:#15803d; font-size:0.9rem;">Image loaded — Natural original preview</div>
+            <div style="color:#166534; font-size:0.8rem;">OCR is applied to the original image. Enhancement only runs internally to improve text detection accuracy.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.image(pil_img, caption=f"📄 {doc_name} — Original (Natural Colors)", use_container_width=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+# ──────────────────────────────────────────────
+# Preprocessing Pipeline (for OCR accuracy only)
+# ──────────────────────────────────────────────
+with st.spinner("🎨 Enhancing image for OCR inference..."):
     # Use user-selected mode; camera_enhance only activates if user explicitly picks it
     effective_mode = preprocess_mode
     processed_img, preprocess_meta = full_preprocess(pil_img, mode=effective_mode)
