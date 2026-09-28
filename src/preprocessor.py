@@ -68,6 +68,34 @@ def sharpen_image(cv2_img: np.ndarray, strength: float = 1.3) -> np.ndarray:
     return sharpened
 
 
+def adjust_brightness_contrast(cv2_img: np.ndarray, brightness: int = 0, contrast: float = 1.0) -> np.ndarray:
+    """
+    Adjust brightness (-100 to 100) and contrast (0.5 to 3.0).
+    Allows user to brighten underexposed camera captures.
+    """
+    adjusted = cv2.convertScaleAbs(cv2_img, alpha=contrast, beta=brightness)
+    return adjusted
+
+
+def extreme_contrast_text(cv2_img: np.ndarray) -> np.ndarray:
+    """
+    Extract faint, low-contrast ink on paper by computing adaptive local contrast.
+    Guarantees text characters become distinct and visible.
+    """
+    gray = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2GRAY)
+    # Estimate background illumination
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25))
+    bg = cv2.morphologyEx(gray, cv2.MORPH_DILATE, kernel)
+    # Background subtraction
+    diff = 255 - cv2.absdiff(gray, bg)
+    norm = cv2.normalize(diff, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8UC1)
+    
+    # Adaptive enhancement
+    clahe = cv2.createCLAHE(clipLimit=3.5, tileGridSize=(8, 8))
+    enhanced = clahe.apply(norm)
+    return cv2.cvtColor(enhanced, cv2.COLOR_GRAY2BGR)
+
+
 def auto_deskew(img: np.ndarray) -> np.ndarray:
     """Detect text tilt and rotate image to align text horizontally."""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -250,9 +278,12 @@ def full_preprocess(pil_img: Image.Image, mode: str = "auto") -> tuple[Image.Ima
     cv2_img = denoise(cv2_img)
     steps_applied.append("bilateral_denoise")
 
-    # Step 7: Binarization if requested
+    # Step 7: Binarization or Extreme Contrast if requested
     if mode == "binarize":
         cv2_img = binarize(cv2_img)
         steps_applied.append("adaptive_binarize")
+    elif mode == "extreme_contrast":
+        cv2_img = extreme_contrast_text(cv2_img)
+        steps_applied.append("extreme_contrast_text")
 
     return cv2_to_pil(cv2_img), {"steps": steps_applied}
