@@ -250,14 +250,62 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-uploaded_file = st.file_uploader(
-    "📂 Drop your document image here (JPG, PNG, WEBP)",
-    type=["jpg", "jpeg", "png", "webp"],
-    help="Supports scanned documents, receipts, ID cards, medical records, business cards, and more."
-)
+# Input Mode Tabs
+input_tab1, input_tab2, input_tab3 = st.tabs([
+    "📁 Upload File",
+    "✨ Preset Sample Documents",
+    "📸 Camera Scanner",
+])
 
-if uploaded_file is None:
+pil_img = None
+doc_name = "document.png"
+
+with input_tab1:
+    uploaded_file = st.file_uploader(
+        "Drop your document image here (JPG, PNG, WEBP)",
+        type=["jpg", "jpeg", "png", "webp"],
+        help="Supports scanned documents, invoices, receipts, ID cards, forms, and business records.",
+        key="file_uploader_input"
+    )
+    if uploaded_file is not None:
+        pil_img = Image.open(uploaded_file).convert("RGB")
+        doc_name = uploaded_file.name
+
+with input_tab2:
+    st.markdown("""
+    <div style="color:#94a3b8; font-size:0.88rem; margin-bottom: 0.8rem;">
+        No file handy? Pick a pre-configured synthetic sample to test the entire OCR, entity extraction, and embedding pipeline immediately:
+    </div>
+    """, unsafe_allow_html=True)
+
+    sc1, sc2 = st.columns([1, 1])
+    for idx, (s_name, s_fn) in enumerate(SAMPLE_DOCUMENTS.items()):
+        target_col = sc1 if idx % 2 == 0 else sc2
+        with target_col:
+            st.markdown(f"""
+            <div class="doc-card" style="padding:1rem;">
+                <div style="font-weight:700; color:#818cf8; font-size:1rem; margin-bottom:4px;">📄 {s_name}</div>
+                <div style="color:#64748b; font-size:0.78rem; margin-bottom:10px;">Includes tabular line items, totals, dates, and contact info.</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button(f"⚡ Load {s_name}", key=f"btn_sample_{idx}", use_container_width=True):
+                st.session_state["active_sample"] = s_name
+
+    active_s = st.session_state.get("active_sample")
+    if active_s and active_s in SAMPLE_DOCUMENTS and pil_img is None:
+        pil_img = SAMPLE_DOCUMENTS[active_s]()
+        doc_name = f"{active_s.lower().replace(' ', '_')}.png"
+        st.success(f"✓ Loaded sample: **{active_s}**")
+
+with input_tab3:
+    cam_file = st.camera_input("Take a photo of a document", key="camera_scanner_input")
+    if cam_file is not None and pil_img is None:
+        pil_img = Image.open(cam_file).convert("RGB")
+        doc_name = "camera_capture.png"
+
+if pil_img is None:
     # Landing feature grid
+    st.markdown("<br>", unsafe_allow_html=True)
     cols = st.columns(4)
     features = [
         ("🔍", "Visual OCR", "Bounding boxes with confidence heatmap & reading-order"),
@@ -279,12 +327,6 @@ if uploaded_file is None:
             </div>
             """, unsafe_allow_html=True)
     st.stop()
-
-
-# ──────────────────────────────────────────────
-# Load & Preprocess
-# ──────────────────────────────────────────────
-pil_img = Image.open(uploaded_file).convert("RGB")
 
 with st.spinner("🎨 Preprocessing image..."):
     processed_img, preprocess_meta = full_preprocess(pil_img, mode=preprocess_mode)
@@ -437,11 +479,23 @@ with tab_text:
     c1, c2 = st.columns([2, 1])
     with c1:
         st.markdown(f"""<div class="doc-card">
-            <div style="font-weight:600;color:#e2e8f0;margin-bottom:8px;">
-                Full Extracted Text {'<span class="badge badge-red" style="margin-left:8px;">PII REDACTED</span>' if auto_redact and pii_count > 0 else ''}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <span style="font-weight:600; color:#e2e8f0;">
+                    Extracted Text
+                    {'<span class="badge badge-red" style="margin-left:8px;">PII REDACTED</span>' if auto_redact and pii_count > 0 else ''}
+                </span>
+                <span style="font-size:0.75rem; color:#64748b;">
+                    {len(display_text.split())} words · {len(display_text)} chars
+                </span>
             </div>
-            <div style="color:#94a3b8;font-size:0.88rem;line-height:1.7;white-space:pre-wrap;">{display_text}</div>
         </div>""", unsafe_allow_html=True)
+        st.text_area(
+            "Extracted Text Content",
+            value=display_text,
+            height=380,
+            label_visibility="collapsed",
+            help="Select all and Ctrl+C to copy, or edit text directly."
+        )
 
     with c2:
         st.markdown("#### 📊 Word Confidence Table")
@@ -451,7 +505,7 @@ with tab_text:
             "Width": r["width"],
             "Height": r["height"],
         } for r in sorted(ocr_results, key=lambda x: x["confidence"], reverse=True)])
-        st.dataframe(df, use_container_width=True, height=450)
+        st.dataframe(df, use_container_width=True, height=420)
 
 
 # ────────────────
@@ -708,9 +762,35 @@ with tab_embed:
 # ────────────────
 with tab_export:
     st.markdown("""<div class="doc-card">
-        <div style="font-weight:600;color:#e2e8f0;margin-bottom:4px;">📤 Export Formats</div>
-        <div style="color:#64748b;font-size:0.82rem;">Download your processed document in multiple formats for downstream use.</div>
+        <div style="font-weight:600;color:#e2e8f0;margin-bottom:4px;">📤 Export Formats & Downloads</div>
+        <div style="color:#64748b;font-size:0.82rem;">Download your processed document in multiple formats or grab the all-in-one ZIP archive.</div>
     </div>""", unsafe_allow_html=True)
+
+    base_doc_stem = os.path.splitext(doc_name)[0]
+
+    # One-click all formats bundle
+    st.markdown("""
+    <div style="margin-bottom:12px;">
+        <span style="font-size:0.88rem; font-weight:600; color:#818cf8;">📦 All-In-One Bundle</span>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("🗜️ Prepare Complete Export Bundle (ZIP)", type="primary", use_container_width=True):
+        with st.spinner("Bundling all formats (PDFs, JSON, CSV, TXT) into ZIP archive..."):
+            zip_bytes = export_bundle_zip(processed_img, ocr_results, entities, display_text, base_name=base_doc_stem)
+        st.download_button(
+            "⬇️ Download All Formats (.ZIP Archive)",
+            data=zip_bytes,
+            file_name=f"{base_doc_stem}_complete_export.zip",
+            mime="application/zip",
+            use_container_width=True,
+        )
+
+    st.markdown("<hr style='margin:1.2rem 0;'>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style="margin-bottom:12px;">
+        <span style="font-size:0.88rem; font-weight:600; color:#cbd5e1;">📄 Individual Formats</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     ec1, ec2 = st.columns(2)
 
@@ -718,11 +798,11 @@ with tab_export:
         # Searchable PDF
         if st.button("📄 Generate Searchable PDF", use_container_width=True):
             with st.spinner("Generating searchable PDF..."):
-                pdf_bytes = export_searchable_pdf(processed_img, ocr_results, uploaded_file.name)
+                pdf_bytes = export_searchable_pdf(processed_img, ocr_results, doc_name)
             st.download_button(
                 "⬇️ Download Searchable PDF",
                 data=pdf_bytes,
-                file_name=f"{os.path.splitext(uploaded_file.name)[0]}_searchable.pdf",
+                file_name=f"{base_doc_stem}_searchable.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
@@ -735,17 +815,17 @@ with tab_export:
             st.download_button(
                 "⬇️ Download Annotated PDF",
                 data=pdf_bytes,
-                file_name=f"{os.path.splitext(uploaded_file.name)[0]}_report.pdf",
+                file_name=f"{base_doc_stem}_report.pdf",
                 mime="application/pdf",
                 use_container_width=True,
             )
 
         # JSON
-        json_bytes = export_json(ocr_results, entities, {"filename": uploaded_file.name})
+        json_bytes = export_json(ocr_results, entities, {"filename": doc_name})
         st.download_button(
             "⬇️ Download Structured JSON",
             data=json_bytes,
-            file_name=f"{os.path.splitext(uploaded_file.name)[0]}_data.json",
+            file_name=f"{base_doc_stem}_data.json",
             mime="application/json",
             use_container_width=True,
         )
@@ -756,7 +836,7 @@ with tab_export:
         st.download_button(
             "⬇️ Download CSV / Excel",
             data=csv_bytes,
-            file_name=f"{os.path.splitext(uploaded_file.name)[0]}_words.csv",
+            file_name=f"{base_doc_stem}_words.csv",
             mime="text/csv",
             use_container_width=True,
         )
@@ -766,17 +846,16 @@ with tab_export:
         st.download_button(
             f"⬇️ Download Plain Text {'(Redacted)' if auto_redact else ''}",
             data=txt_bytes,
-            file_name=f"{os.path.splitext(uploaded_file.name)[0]}_text.txt",
+            file_name=f"{base_doc_stem}_text.txt",
             mime="text/plain",
             use_container_width=True,
         )
 
         # Export entity summary
-        entity_summary = json_bytes  # Already includes entities
         st.download_button(
             "⬇️ Download Entity Summary (JSON)",
-            data=export_json([], entities, {"filename": uploaded_file.name, "type": "entities_only"}),
-            file_name=f"{os.path.splitext(uploaded_file.name)[0]}_entities.json",
+            data=export_json([], entities, {"filename": doc_name, "type": "entities_only"}),
+            file_name=f"{base_doc_stem}_entities.json",
             mime="application/json",
             use_container_width=True,
         )
