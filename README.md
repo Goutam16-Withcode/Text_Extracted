@@ -1,3 +1,16 @@
+---
+title: DocIQ - Intelligent Document Processing
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: streamlit
+sdk_version: "1.40.0"
+app_file: app.py
+pinned: false
+license: mit
+short_description: OCR, text extraction, PII redaction & semantic search for documents
+---
+
 # 🧠 DocIQ — Advanced Intelligent Document Processing (IDP) Platform
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
