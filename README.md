@@ -1,6 +1,5 @@
 ---
-
-title: DocIQ — Intelligent Document Processing
+title: DocIQ - Intelligent Document Processing
 emoji: 🧠
 colorFrom: blue
 colorTo: purple
@@ -9,7 +8,7 @@ sdk_version: "1.40.0"
 python_version: "3.10"
 app_file: app.py
 pinned: false
--------------
+---
 
 # 🧠 DocIQ — Intelligent Document Processing
 
