@@ -608,39 +608,46 @@ if not is_camera_input:  # Camera tab already shows its own preview
     st.markdown("<br>", unsafe_allow_html=True)
 
 # ──────────────────────────────────────────────
-# Preprocessing Pipeline (for OCR accuracy only)
+# Pipeline: Preprocess → OCR → Entities (with live status)
 # ──────────────────────────────────────────────
-with st.spinner("🎨 Enhancing image for OCR inference..."):
-    # Use user-selected mode; camera_enhance only activates if user explicitly picks it
+with st.status("⚙️ Running DocIQ Pipeline...", expanded=True) as pipeline_status:
+
+    # Step 1 — Image Enhancement
+    st.write("🎨 **Step 1 / 3 — Enhancing image for OCR...")
     effective_mode = preprocess_mode
     processed_img, preprocess_meta = full_preprocess(pil_img, mode=effective_mode)
+    st.write(f"✅ Image enhanced · Mode: `{effective_mode}` · Steps: {len(preprocess_meta.get('steps', []))} applied")
 
-
-# ──────────────────────────────────────────────
-# OCR Neural Inference
-# ──────────────────────────────────────────────
-with st.spinner("🧠 Running neural OCR inference (GPU accelerated)..."):
+    # Step 2 — Neural OCR Inference
+    st.write("🧠 **Step 2 / 3 — Loading OCR engine & running inference...**")
+    st.caption("EasyOCR model initializes once and is cached for the session. First run may take 30–60s.")
     ocr_results = run_ocr(
         processed_img,
         languages=languages,
         confidence_threshold=confidence_threshold,
         camera_mode=(camera_opt or is_camera_input)
     )
+    if ocr_results:
+        st.write(f"✅ OCR complete · {len(ocr_results)} text regions detected")
+    else:
+        st.error("❌ No text detected. Try a different preprocessing mode or lower the confidence filter.")
+        pipeline_status.update(label="⚠️ Pipeline finished — no text found", state="error", expanded=True)
+        st.stop()
 
-if not ocr_results:
-    st.warning("⚠️ No text detected. Try switching the processing mode to 'Camera & Mobile Capture' in the sidebar or lowering the confidence filter.")
-    st.stop()
-
-full_text = get_full_text(ocr_results)
-accuracy_stats = compute_accuracy_metrics(ocr_results, full_text=full_text)
-
-# PII Redaction
-redacted_text, pii_count = redact_pii(full_text) if auto_redact else (full_text, 0)
-display_text = redacted_text if auto_redact else full_text
-
-# Entity Extraction
-with st.spinner("🔍 Extracting structured entities..."):
+    # Step 3 — Entity Extraction
+    st.write("🔍 **Step 3 / 3 — Extracting structured entities & metrics...**")
+    full_text = get_full_text(ocr_results)
+    accuracy_stats = compute_accuracy_metrics(ocr_results, full_text=full_text)
+    redacted_text, pii_count = redact_pii(full_text) if auto_redact else (full_text, 0)
+    display_text = redacted_text if auto_redact else full_text
     entities = extract_all(full_text)
+    st.write(f"✅ Entities extracted · Accuracy: **{accuracy_stats['overall_accuracy']}%** · Grade: **{accuracy_stats['quality_grade']}**")
+
+    pipeline_status.update(
+        label=f"✅ Pipeline complete — {len(ocr_results)} words · {accuracy_stats['overall_accuracy']}% accuracy · Grade {accuracy_stats['quality_grade']}",
+        state="complete",
+        expanded=False
+    )
 
 
 # ──────────────────────────────────────────────
