@@ -8,7 +8,7 @@ sdk_version: "1.40.0"
 app_file: app.py
 pinned: false
 license: mit
-short_description: OCR, text extraction, PII redaction & semantic search for documents
+short_description: OCR, PII redaction & semantic search for docs
 ---
 
 # 🧠 DocIQ — Advanced Intelligent Document Processing (IDP) Platform
